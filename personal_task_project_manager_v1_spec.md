@@ -1,6 +1,10 @@
-# Personal Task & Project Manager
+# Heap — Personal Task & Project Manager
 
 ## Version 1 Domain Specification
+
+Task terminology: **on-deck** means organized work waiting for its turn, not
+necessarily unblocked or started. Older references below to active tasks mean
+on-deck tasks; project status remains Active.
 
 ### 1. Purpose
 
@@ -213,20 +217,27 @@ Short description of the work.
 
 ### Project
 
-Tasks normally belong to a project.
-
-The implementation may permit project-less tasks temporarily,
-particularly while they are in the inbox.
+Tasks may belong to a project. Standalone tasks are permitted both in the
+inbox and on-deck.
 
 ### Status
 
 Suggested states include:
 
 -   Inbox
--   Active
--   Blocked
+-   On Deck
 -   Needs Scoping
 -   Completed
+
+Blocked is a derived condition, not a stored lifecycle status. It results
+from incomplete task dependencies or an external blocking reason.
+
+Moving an inbox task on-deck requires an assigned priority and known duration.
+Project membership is optional. Repeating the move does not reset timestamps.
+Clearing priority or resetting duration to unknown returns an on-deck task to
+the inbox, clears `on_deck_since`, and updates the meaningful-change timestamp
+in the same save. Restoring the missing value does not automatically move the
+task on-deck; an explicit move starts a new on-deck timestamp.
 
 Additional internal states may be introduced if justified.
 
@@ -274,8 +285,10 @@ An additional state should represent:
 
 -   Unknown / Unscoped
 
-Unknown duration is meaningful. It indicates that the task has not been
-sufficiently scoped to participate normally in ranking.
+Unknown duration is meaningful. Items with unknown duration should appear
+in the inbox for further user clarification or specification. They are
+excluded from actionable recommendations, whether or not available time
+is specified.
 
 Tasks larger than approximately four hours should normally be broken
 into smaller tasks.
@@ -288,7 +301,13 @@ A missing due date should not negatively affect a task.
 
 ### Created Timestamp
 
-Used for history and staleness calculations.
+Used for history and inbox review age.
+
+### On-Deck Timestamp
+
+Record `on_deck_since` when the task moves on-deck. Task age bonuses and
+staleness calculations use this timestamp, not creation or the last update.
+Ordinary edits do not reset it.
 
 ### Updated Timestamp
 
@@ -374,7 +393,10 @@ The goal is to encourage deliberate sorting.
 
 # 7. Blocking and Dependencies
 
-A task may be blocked.
+A task may be blocked. Blocking is derived from incomplete task
+dependencies and external blocking reasons, rather than stored as a
+separate lifecycle status. Completing a prerequisite removes its blocking
+effect; other unresolved blockers still apply.
 
 Blocking may result from:
 
@@ -478,6 +500,11 @@ Examples:
 -   Every Saturday
 
 Completing the task early or late does not permanently move the cadence.
+
+The next occurrence is eligible for recommendations immediately, even
+when its due date is in the future. The due date influences ranking; it
+does not act as a "not before" date or an eligibility gate. A future
+occurrence may therefore be recommended early.
 
 ## 9.3 Missed Occurrences
 
@@ -614,6 +641,10 @@ the currently recorded tasks are done.
 
 The user may still need to add another task.
 
+The exact review condition remains undecided, including whether blocked,
+inbox, or unscoped work should prevent a completion-review flag. Resolve
+this when implementing project-completion behavior.
+
 ------------------------------------------------------------------------
 
 # 13. Global Ranking vs Project View
@@ -675,7 +706,7 @@ Examples:
 -   Blocked
 -   Inbox / unclassified
 -   Needs scoping
--   Unknown duration, when duration-fit ranking is requested
+-   Unknown duration (surfaced in the inbox for clarification)
 -   Oversized task
 -   Context mismatch
 -   Duration exceeds available time
@@ -775,6 +806,9 @@ Exact timing thresholds and score curves are tunable.
 
 Age should matter, but only as a bounded anti-staleness mechanism.
 
+Measure task age and staleness from `on_deck_since`, not creation or the last
+meaningful update.
+
 An older task should gradually receive more visibility.
 
 However:
@@ -796,7 +830,7 @@ review rather than receiving additional ranking power.
 
 Example review prompt:
 
-> This task has been active for 45 days. Is it still important, does it
+> This task has been on-deck for 45 days. Is it still important, does it
 > need to be broken down, or should it be removed?
 
 The exact age curve and review threshold are tunable.

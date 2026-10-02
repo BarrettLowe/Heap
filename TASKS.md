@@ -1,66 +1,83 @@
-# V1 implementation tasks
+# Heap V1 implementation tasks
 
 Work through these together, one small change at a time. The order is a starting point; adjust it as we learn. Check off tasks after verification, not just implementation.
 
-The original spec is in `personal_task_project_manager_v1_spec.md`. Decisions made since that draft:
-
-- Blocking is derived from incomplete dependencies and external blocking reasons.
-- A recurring task's next instance is eligible immediately. Its due date affects ranking, not eligibility.
-- Staleness is measured from activation.
-- Unknown-duration items go to the inbox for clarification and stay out of actionable recommendations.
-- Project-completion review rules are deferred until step 14.
+Requirements and domain decisions live in `personal_task_project_manager_v1_spec.md`.
 
 For coding tasks: agree on the immediate behavior, write a failing test, implement the smallest change, then review together. Names and package boundaries below are responsibilities to design, not a prescribed class hierarchy.
 
 ## 1. Spec cleanup (optional; likely skipped)
 
-- [ ] Fold the decisions above into the original spec.
+- [x] Fold the agreed domain decisions into the original spec.
 - [ ] Record unresolved questions without deciding them prematurely.
 
 Verification: the spec matches our current decisions. This is not a prerequisite for coding.
 
 ## 2. Architecture boundaries
 
-- [ ] Agree on the division between domain models, application services, persistence, and ranking policies.
-- [ ] Sketch package boundaries and the persistence interface for the first slice.
-- [ ] Decide how to supply time explicitly in tests.
+- [ ] Agree on the division between task/project dataclasses, application operations, persistence, and ranking policies.
+- [x] Sketch package boundaries and the persistence interface for the first slice.
+- [x] Decide how to supply time explicitly in tests.
+
+First slice: `src/heap/logic/` holds task snapshots, `TaskOperator`, and the `TaskStore` interface (`save`, `get`); `persistence/` holds SQLite. Production reads current UTC time; tests patch the time source without changing the public API.
 - [ ] Trace capture and recommendation requests through the proposed components.
 
 Verification: we can explain which component owns each responsibility without designing every future class.
 
 ## 3. Python project and test setup
 
-- [ ] Choose dependency management and test tooling.
-- [ ] Create the initial package and test layout.
-- [ ] Add a smoke test and document the test command.
+- [x] Choose dependency management and test tooling.
+- [x] Create the initial package and test layout.
+- [x] Add a smoke test and document the test command.
+
+Verified with `uv run pytest`: three capture/storage tests pass. Tooling: uv, pytest, and pytest-cov; commands are in `README.md`.
 
 Verification: one command runs the tests successfully.
 
-## 4. Capture service and SQLite round trip
+## 4. Capture operation and SQLite round trip
 
-- [ ] Define the minimum inbox task model: identifier, title, and timestamps.
-- [ ] Add the persistence operations needed to save and retrieve it.
-- [ ] Implement those operations in SQLite.
-- [ ] Route title-only capture through the application service.
-- [ ] Test retrieval after closing and reopening the database.
+- [x] Define the minimum inbox task model: identifier, title, and timestamps.
+- [x] Add the persistence operations needed to save and retrieve it.
+- [x] Implement those operations in SQLite.
+- [x] Route title-only capture through the application operation.
+- [x] Test retrieval after closing and reopening the database.
+- [x] Add `TaskOperator.list_inbox()` with oldest-first ordering and ID tie-breaking.
+
+Inbox listing verified: empty results, reopening with multiple tasks, stable ordering, independent snapshots, and exclusion of non-inbox rows. Full suite: eight passing tests, 100% line coverage.
+
+Verified: capture preserves ID, title, inbox status, and UTC timestamps across reopening. Tests also check missing IDs and explicit-save behavior. First-slice line coverage: 100%.
 
 Verification: a captured inbox item survives a restart. This is the first working end-to-end slice.
 
-## 5. Project model and task activation
+## 5. Projects and moving tasks on-deck
 
-- [ ] Add project creation and retrieval through the service and persistence layers.
-- [ ] Define priority levels and their descriptive labels.
-- [ ] Define duration buckets.
-- [ ] Agree on activation requirements, including whether active tasks require a project.
-- [ ] Add task organization and activation, recording activation time.
-- [ ] Keep unknown-duration items in the inbox for clarification.
+- [x] Add project creation and retrieval through the logic and persistence layers.
 
-Verification: a captured item can become a scoped, active task associated with a project; an unknown-duration item cannot enter actionable recommendations.
+Project creation/retrieval verified: active projects with optional descriptions and UTC timestamps survive reopening SQLite; missing IDs return `None`; snapshot changes require explicit saves. Full suite: twelve passing tests, 100% line coverage.
+- [x] Define priority levels and their descriptive labels.
+- [x] Define duration buckets.
 
-## 6. Lifecycle services
+Priority/duration verified: P1–P5 carry the agreed labels; duration supports unknown and 5/15/30/60/120/240 minutes. Capture leaves priority unset and duration unknown. All combinations survive SQLite reopening; the previous schema upgrades without losing tasks. Full suite: 61 passing tests, 100% line coverage.
+- [x] Agree on on-deck requirements: assigned priority, known duration, project optional.
+- [x] Add task organization and moving on-deck, recording `on_deck_since`.
+- [x] Keep unknown-duration items in the inbox for clarification.
+  - [x] Reject moving an unknown-duration inbox task on-deck.
+  - [x] Clearing priority/duration returns an on-deck task to the inbox and clears `on_deck_since`.
+
+On-deck verified: standalone and project-associated tasks survive reopening; repeated moves and valid edits preserve on-deck age. Clearing a required field returns the task to the inbox, and a later explicit move starts a new timestamp. Full suite: 86 passing tests, 100% line coverage.
+
+Verification: a captured item can become a scoped, on-deck task with or without a project; an unknown-duration item cannot enter actionable recommendations.
+
+## 6. Lifecycle operations
 
 - [ ] Add task and project editing.
+  - [x] Add task priority/duration setters, including clearing values.
+  - [x] Add task title editing and project assignment/reassignment/removal.
 - [ ] Define meaningful changes for updated timestamps.
+  - [x] Priority/duration changes update `updated_at`; unchanged values do not save or change timestamps.
+  - [x] Apply the same timestamp/no-op rules to title and project edits.
+
+Task editing verified: title, priority, duration, and project edits survive reopening, preserve inbox status and unrelated fields, and leave unchanged values alone. Project assignment checks existence; missing IDs raise `KeyError`. Older task tables gain nullable project IDs. Full suite: 74 passing tests, 100% line coverage. Project editing remains open.
 - [ ] Add task completion with a completion timestamp and retained history.
 - [ ] Add intentional task hard deletion.
 
@@ -89,7 +106,7 @@ Verification: tests identify exactly which tasks qualify for a query such as "30
 ## 9. Ranking policy and explanation results
 
 - [ ] Agree on initial priority weights and the nonlinear due-date urgency curve.
-- [ ] Add a bounded age contribution measured from activation.
+- [ ] Add a bounded age contribution measured from `on_deck_since`.
 - [ ] Add a small optional project-priority contribution.
 - [ ] Expose the contributions and eligibility decisions in result data.
 - [ ] Define a stable tie-breaker and test with a fixed time.
@@ -108,7 +125,7 @@ Verification: one project cannot flood global results, while its project view re
 ## 11. Review policies for inbox and staleness
 
 - [ ] Detect inbox items beyond the configurable review age.
-- [ ] Flag active tasks beyond the configurable staleness threshold.
+- [ ] Flag on-deck tasks beyond the configurable staleness threshold.
 - [ ] Keep review conditions separate from actionable recommendations.
 - [ ] Test threshold boundaries and the age-bonus cap.
 
@@ -143,7 +160,7 @@ Verification: project completion is deliberate, and tests cover its effect on re
 
 ## 15. V1 integration harness
 
-- [ ] Add a minimal script or CLI that calls the same application services.
+- [ ] Add a minimal script or CLI that calls the same application operations.
 - [ ] Create realistic sample data.
 - [ ] Request the five best tasks given available time and context.
 - [ ] Verify explanations, diversification, recurrence history, and persistence together.

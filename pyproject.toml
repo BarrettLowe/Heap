@@ -1,0 +1,15 @@
+[project]
+name = "heap"
+version = "0.1.0"
+description = "Heap — personal task and project manager core"
+requires-python = ">=3.12"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-cov>=6"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
