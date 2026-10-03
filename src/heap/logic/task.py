@@ -12,6 +12,7 @@ class TaskStatus(StrEnum):
 
     INBOX = "inbox"
     ON_DECK = "on_deck"
+    COMPLETED = "completed"
 
 
 @dataclass
@@ -27,3 +28,5 @@ class Task:
     duration: Duration = Duration.UNKNOWN
     project_id: UUID | None = None
     on_deck_since: datetime | None = None
+    completed_at: datetime | None = None
+    externally_blocked: bool = False

@@ -229,8 +229,9 @@ Suggested states include:
 -   Needs Scoping
 -   Completed
 
-Blocked is a derived condition, not a stored lifecycle status. It results
-from incomplete task dependencies or an external blocking reason.
+Dependency blocking is a derived condition, not a stored lifecycle status.
+It results from incomplete task dependencies. External blocking is recorded
+separately as a fully manual boolean.
 
 Moving an inbox task on-deck requires an assigned priority and known duration.
 Project membership is optional. Repeating the move does not reset timestamps.
@@ -393,10 +394,10 @@ The goal is to encourage deliberate sorting.
 
 # 7. Blocking and Dependencies
 
-A task may be blocked. Blocking is derived from incomplete task
-dependencies and external blocking reasons, rather than stored as a
-separate lifecycle status. Completing a prerequisite removes its blocking
-effect; other unresolved blockers still apply.
+A task may be dependency-blocked. This is derived from incomplete task
+dependencies, rather than stored as a separate lifecycle status. Completing
+a prerequisite removes its blocking effect; other incomplete prerequisites
+still apply.
 
 Blocking may result from:
 
@@ -412,6 +413,12 @@ blocked by:
 
 This should use an explicit task dependency relationship.
 
+Support both single-task and bulk dependency-blocking checks against current
+saved state. A task is dependency-blocked when any direct prerequisite is not
+completed. Do not store a separate dependency-blocking flag. A bulk check for
+a 100-task view should use 1 database query rather than fetch prerequisites
+individually. These checks report dependency state, not overall task eligibility.
+
 ### External Condition
 
 A task may also be blocked by something outside the application.
@@ -423,10 +430,11 @@ Examples:
 -   Waiting for weather
 -   Waiting for a contractor
 
-An external blocking reason should therefore be representable as text or
-equivalent metadata.
+External blocking is limited to a fully manual `externally_blocked` boolean
+on each task, defaulting to false. It has no effect on ranking. No reason
+text or automatic updates are required.
 
-Blocked tasks should not appear as ordinary actionable recommendations.
+Dependency-blocked tasks should not appear as ordinary actionable recommendations.
 
 ------------------------------------------------------------------------
 

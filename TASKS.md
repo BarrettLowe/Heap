@@ -70,27 +70,43 @@ Verification: a captured item can become a scoped, on-deck task with or without 
 
 ## 6. Lifecycle operations
 
-- [ ] Add task and project editing.
+- [x] Add task and project editing.
   - [x] Add task priority/duration setters, including clearing values.
   - [x] Add task title editing and project assignment/reassignment/removal.
-- [ ] Define meaningful changes for updated timestamps.
+  - [x] Add project name/description editing, including clearing the description.
+- [x] Define meaningful changes for updated timestamps.
   - [x] Priority/duration changes update `updated_at`; unchanged values do not save or change timestamps.
   - [x] Apply the same timestamp/no-op rules to title and project edits.
+  - [x] Apply the same timestamp/no-op rules to project name/description edits.
 
-Task editing verified: title, priority, duration, and project edits survive reopening, preserve inbox status and unrelated fields, and leave unchanged values alone. Project assignment checks existence; missing IDs raise `KeyError`. Older task tables gain nullable project IDs. Full suite: 74 passing tests, 100% line coverage. Project editing remains open.
-- [ ] Add task completion with a completion timestamp and retained history.
-- [ ] Add intentional task hard deletion.
+Task editing verified: title, priority, duration, and project edits survive reopening, preserve inbox status and unrelated fields, and leave unchanged values alone. Project assignment checks existence; missing IDs raise `KeyError`. Older task tables gain nullable project IDs. Full suite at that step: 74 passing tests, 100% line coverage.
+
+Project editing verified: name and description edits (including clearing descriptions) through `ProjectOperator` survive reopening SQLite and preserve unrelated fields. Unchanged values do not save or change timestamps; missing IDs raise `KeyError`. Existing direct-save snapshot tests remain unchanged. Full suite: 93 passing tests, 100% line coverage.
+- [x] Add task completion with a completion timestamp and retained history.
+- [x] Add intentional task hard deletion.
+  - [x] Add all-or-nothing batch deletion and dependency-link cleanup.
+
+Completion/deletion verified: inbox and on-deck tasks retain their fields and completion timestamps across reopening; repeated completion does not save or read time. Completed tasks stay out of the inbox and cannot move back on-deck. Explicit deletion removes inbox, on-deck, or completed tasks without changing other tasks or their projects. Missing IDs raise `KeyError`; write failures propagate without reporting success. Older task tables gain nullable completion timestamps without losing existing data. Full suite: 104 passing tests, 100% line coverage.
 
 Verification: lifecycle tests check state and timestamps, including SQLite round trips.
 
 ## 7. Dependency model and derived blocking
 
-- [ ] Represent task dependencies and external blocking reasons.
-- [ ] Derive blocking from unresolved prerequisites and external reasons.
-- [ ] Reject self-dependencies and cycles.
-- [ ] Decide what happens when a prerequisite is deleted.
+- [x] Represent task dependencies and a manual external-blocking flag.
+  - [x] Store task-to-task dependencies and add application operations to add, remove, and list them.
+  - [x] Add a fully manual `externally_blocked` boolean and setter, with no ranking influence.
+- [x] Derive dependency blocking from unfinished prerequisite tasks.
+  - [x] Add single-task and bulk checks; verify a 100-task lookup uses 1 query.
+- [x] Reject self-dependencies and cycles.
+- [x] Decide what happens when a prerequisite is deleted.
 
-Verification: completing a prerequisite removes its blocking effect; other blockers still apply.
+Dependencies/batch deletion verified: links survive reopening in stable ID order; self-dependencies, cycles, and missing task IDs are rejected. Explicit link edits update only the dependent task's timestamp in the same transaction; unchanged links do not write or read time. Deleting a task removes all incoming/outgoing links without changing surviving task snapshots. Batch deletion rolls back tasks and links if any ID is missing or any deletion fails; empty batches do nothing and repeated IDs count once. Existing databases gain the dependency table without losing task data. Full suite: 133 passing tests, 100% line and branch coverage. Cycle validation currently assumes non-overlapping dependency edits; overlapping writers are not yet supported. At that step, external blocking and derived blocking remained open.
+
+Manual external blocking verified: tasks default to `externally_blocked=False`; setting/clearing through `TaskOperator` survives reopening and changes only the flag and `updated_at`. Unchanged values do not save or read time; missing IDs raise `KeyError`; failed saves propagate. The flag stays manual through dependency and lifecycle operations. Older databases gain a false default without losing task data. No ranking or eligibility behavior was added. Full suite: 146 passing tests, 100% line and branch coverage. At that step, derived dependency blocking remained open.
+
+Dependency blocking verified: `TaskOperator.is_dependency_blocked()` uses `get_dependency_blocking()` for a single ID. Bulk checks use 1 SQL query against current saved prerequisite statuses; no prerequisites or only completed prerequisites produce `False`. Completing, unlinking, or deleting a prerequisite changes the result without saving a blocking flag, while other unfinished prerequisites still block. Checks ignore the manual external flag and do not decide task eligibility. Empty input returns `{}` without SQL; repeated IDs count once; missing IDs raise `KeyError` in input order. Tests trace the SQL to verify single-task and 100-task lookups use 1 query, including after reopening. Full suite: 163 passing tests, 100% line and branch coverage.
+
+Verification: completing a prerequisite removes its dependency-blocking effect; other unfinished prerequisites still apply.
 
 ## 8. Context model and eligibility policy
 

@@ -34,3 +34,25 @@ class ProjectOperator:
     def get(self, project_id: UUID) -> Project | None:
         """Retrieve a project snapshot, or None if the ID does not exist."""
         return self._store.get(project_id)
+
+    def set_name(self, project_id: UUID, name: str) -> Project:
+        """Save a name change; missing project IDs raise KeyError."""
+        project = self._store.get(project_id)
+        if project is None:
+            raise KeyError(project_id)
+        if project.name != name:
+            project.name = name
+            project.updated_at = current_time()
+            self._store.save(project)
+        return project
+
+    def set_description(self, project_id: UUID, description: str | None) -> Project:
+        """Save or clear a description; missing project IDs raise KeyError."""
+        project = self._store.get(project_id)
+        if project is None:
+            raise KeyError(project_id)
+        if project.description != description:
+            project.description = description
+            project.updated_at = current_time()
+            self._store.save(project)
+        return project

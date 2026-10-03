@@ -40,17 +40,106 @@ class TaskOperator:
         """Return inbox snapshots oldest-first, breaking timestamp ties by ID."""
         return self._store.list_inbox()
 
+    def complete(self, task_id: UUID) -> Task:
+        """Retain a task as completed; repeated completion leaves it unchanged.
+
+        Missing task IDs raise KeyError.
+        """
+        task = self._store.get(task_id)
+        if task is None:
+            raise KeyError(task_id)
+        if task.status is TaskStatus.COMPLETED:
+            return task
+        now = current_time()
+        task.status = TaskStatus.COMPLETED
+        task.completed_at = now
+        task.updated_at = now
+        self._store.save(task)
+        return task
+
+    def delete(self, task_id: UUID) -> None:
+        """Permanently delete a task and its dependency links; missing IDs raise KeyError."""
+        self._store.delete(task_id)
+
+    def delete_many(self, task_ids: list[UUID]) -> None:
+        """Delete a batch and its dependency links, rolling back if any deletion fails.
+
+        Missing IDs raise KeyError. Empty batches do nothing; repeated IDs count once.
+        """
+        self._store.delete_many(task_ids)
+
+    def add_dependency(self, task_id: UUID, prerequisite_id: UUID) -> None:
+        """Save a prerequisite link; duplicate links leave timestamps unchanged.
+
+        Missing IDs raise KeyError; self-dependencies and cycles raise ValueError.
+        Cycle validation assumes dependency edits do not run concurrently.
+        """
+        if self._store.get(task_id) is None:
+            raise KeyError(task_id)
+        if self._store.get(prerequisite_id) is None:
+            raise KeyError(prerequisite_id)
+        if task_id == prerequisite_id:
+            raise ValueError("A task cannot depend on itself")
+        if prerequisite_id in self._store.list_dependencies(task_id):
+            return
+        pending = [prerequisite_id]
+        visited: set[UUID] = set()
+        while pending:
+            current_id = pending.pop()
+            if current_id == task_id:
+                raise ValueError("A dependency cannot create a cycle")
+            if current_id not in visited:
+                visited.add(current_id)
+                pending.extend(self._store.list_dependencies(current_id))
+        self._store.add_dependency(task_id, prerequisite_id, current_time())
+
+    def remove_dependency(self, task_id: UUID, prerequisite_id: UUID) -> None:
+        """Remove a prerequisite link; absent links leave timestamps unchanged.
+
+        Missing task or prerequisite IDs raise KeyError.
+        """
+        if self._store.get(task_id) is None:
+            raise KeyError(task_id)
+        if self._store.get(prerequisite_id) is None:
+            raise KeyError(prerequisite_id)
+        if prerequisite_id in self._store.list_dependencies(task_id):
+            self._store.remove_dependency(task_id, prerequisite_id, current_time())
+
+    def list_dependencies(self, task_id: UUID) -> list[UUID]:
+        """Return prerequisite IDs in ascending ID order; missing IDs raise KeyError."""
+        if self._store.get(task_id) is None:
+            raise KeyError(task_id)
+        return self._store.list_dependencies(task_id)
+
+    def is_dependency_blocked(self, task_id: UUID) -> bool:
+        """Check for an unfinished direct prerequisite; missing IDs raise KeyError."""
+        return self.get_dependency_blocking([task_id])[task_id]
+
+    def get_dependency_blocking(self, task_ids: list[UUID]) -> dict[UUID, bool]:
+        """Check direct prerequisites in bulk, without deciding task eligibility.
+
+        Missing IDs raise KeyError in input order. Empty batches return {};
+        repeated IDs count once. The manual external flag is not considered.
+        """
+        blocking = self._store.get_dependency_blocking(task_ids)
+        for task_id in task_ids:
+            if task_id not in blocking:
+                raise KeyError(task_id)
+        return blocking
+
     def move_to_on_deck(self, task_id: UUID) -> Task:
         """Move an organized inbox task on-deck, preserving time on repeated calls.
 
-        Missing IDs raise KeyError; missing priority or duration raises ValueError.
-        Project membership is optional.
+        Missing IDs raise KeyError. Completed tasks and tasks missing priority
+        or duration raise ValueError. Project membership is optional.
         """
         task = self._store.get(task_id)
         if task is None:
             raise KeyError(task_id)
         if task.status is TaskStatus.ON_DECK:
             return task
+        if task.status is TaskStatus.COMPLETED:
+            raise ValueError("A completed task cannot move on-deck")
         if task.priority is None:
             raise ValueError("Moving on-deck requires an assigned priority")
         if task.duration is Duration.UNKNOWN:
@@ -60,6 +149,17 @@ class TaskOperator:
         task.on_deck_since = now
         task.updated_at = now
         self._store.save(task)
+        return task
+
+    def set_externally_blocked(self, task_id: UUID, externally_blocked: bool) -> Task:
+        """Save the manual external-blocking flag; missing task IDs raise KeyError."""
+        task = self._store.get(task_id)
+        if task is None:
+            raise KeyError(task_id)
+        if task.externally_blocked != externally_blocked:
+            task.externally_blocked = externally_blocked
+            task.updated_at = current_time()
+            self._store.save(task)
         return task
 
     def set_title(self, task_id: UUID, title: str) -> Task:
