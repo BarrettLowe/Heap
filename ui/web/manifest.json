@@ -1,0 +1,9 @@
+{
+  "name": "Heap",
+  "short_name": "Heap",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#FAFAF5",
+  "theme_color": "#214E3B",
+  "description": "Heap task inbox"
+}

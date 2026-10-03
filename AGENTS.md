@@ -1,7 +1,10 @@
 # Heap project guidance
 
 - Build this together with Barrett, one agreed step at a time. Do not autonomously implement the roadmap.
-- Heap is intended for server-side execution with remote access through VPN/Tailscale. Python was chosen with cloud execution in mind, but hosted cloud versus self-hosting is not yet decided. Current local SQLite storage is not a decision to run only on Barrett's workstation.
+- The UI uses Flutter/Material 3 and targets Android first, while keeping web viable. Use both a physical phone and an emulator; the emulator should support agent-assisted inspection and testing. Barrett has deferred Dart lessons and wants agents to build the UI for later review/tweaking.
+- The supplied visual reference guides dark-green/warm-background styling, not new behavior. The app is server-backed first, with unavailable/retry states rather than offline cache, sync, or queued edits.
+- Heap runs server-side through VPN/Tailscale. Use Docker/Compose for the Python backend and retain SQLite in a persistent volume. Hosted cloud versus self-hosting remains undecided; local SQLite is not a workstation-only deployment decision.
+- For delegated implementation, plan first, give Frontend/Backend non-overlapping writable paths, and keep shared documents coordinator-owned. Each implementation agent must obtain its own `openai/gpt-6.1-sol` high-reasoning review, fix findings iteratively, verify, and report back. Barrett limits the delegated team to 3 agents; schedule planning/review subagents so they stay within that limit.
 - Track progress in `TASKS.md`; check off work only after verification. The original requirements are in `personal_task_project_manager_v1_spec.md`.
 - Resolve design questions as they arise. Keep changes small and test business behavior.
 - Update this file as we establish architecture and working conventions. Keep it minimal.

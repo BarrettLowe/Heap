@@ -1,7 +1,38 @@
 # Heap
 
-A Python core for a personal task and project manager. Requirements are in
-`personal_task_project_manager_v1_spec.md`; progress is tracked in `TASKS.md`.
+Heap is a personal task and project manager with a Python core and an Android-first
+Flutter interface. Requirements are in `personal_task_project_manager_v1_spec.md`;
+progress is tracked in `TASKS.md`.
+
+## Server-backed app setup
+
+The framework setup connects the Flutter inbox to the existing Python capture and
+listing operations. It uses a Docker/Compose backend and keeps web support viable.
+It does not implement unfinished ranking or recurrence features.
+
+- [Framework plan and file ownership](docs/framework-plan.md)
+- [Shared HTTP contract](docs/api-contract.md)
+- [Backend setup](docs/backend.md)
+- [Flutter setup](ui/README.md)
+
+The app requires a connection to the server. It does not cache tasks or queue
+offline edits. Keep the backend private through VPN/Tailscale; this skeleton does
+not add public authentication.
+
+### Local Android quick start
+
+From the repository root:
+
+```sh
+docker compose up --build -d --wait
+cd ui
+flutter run -d emulator-5554 --dart-define=HEAP_API_BASE_URL=http://10.0.2.2:8000
+```
+
+Start the emulator first, and use its actual ID if it differs. The database stays
+in the Compose volume across container restarts. **`docker compose down -v`
+deletes that data.** Physical phones need a reachable VPN server address;
+release builds need HTTPS. See the setup links above for web/CORS configuration.
 
 ## Run tests
 
@@ -29,13 +60,15 @@ uv run pytest --cov=heap --cov-report=term-missing --cov-fail-under=80
 tie-breaker for equal creation timestamps. An empty inbox returns `[]`.
 
 The logic layer lives in `src/heap/logic/`, persistence in
-`src/heap/persistence/`. There is no interface layer yet; tests exercise the
-same capture operation a future interface will call.
+`src/heap/persistence/`, and the HTTP interface in `src/heap/interface/`.
+The Flutter inbox calls the HTTP interface, which uses these same capture and
+listing operations.
 
 Production capture reads current UTC time. Tests replace that time source;
 callers do not supply timestamps or configure a clock.
 
-Ranking and title-validation rules are not implemented yet.
+Ranking is not implemented yet. The HTTP interface trims titles and rejects
+blank or invalid input; the core capture operation has no title-validation rule.
 
 ## Projects
 

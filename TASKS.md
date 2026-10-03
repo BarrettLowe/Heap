@@ -182,3 +182,43 @@ Verification: project completion is deliberate, and tests cover its effect on re
 - [ ] Verify explanations, diversification, recurrence history, and persistence together.
 
 Verification: the spec's "five best tasks, 30 minutes, inside" example works reproducibly without adding business rules to the interface.
+
+## 16. Flutter UI — Android first
+
+UI work starts alongside the unfinished Python core, in small agreed steps.
+
+- [x] Create a separate UI worktree and choose the first target.
+- [x] Set up the Android SDK and choose a physical device or emulator.
+- [x] Agree on the Flutter project location and launch the starter app on Android.
+- [ ] Set up and verify physical-phone testing alongside emulator testing.
+- [x] Replace the counter starter with a temporary in-memory Heap inbox and capture form.
+
+Worktree verified with `git worktree list`: `feat/flutter-ui` at `/home/barrett-lowe/PersonalDev/Heap-ui`. Android is the first target. `flutter doctor -v` passes the Android toolchain check with the SDK at `~/Android/Sdk`; `flutter devices` detects `emulator-5554`.
+
+Starter verified: generated the Android-only `heap_app` package in `ui/`. `flutter analyze` found no issues; `flutter test` passed the counter test. `flutter run -d emulator-5554 --no-resident` built, installed, and launched the app; an adb screenshot confirmed the counter screen. Physical-phone testing remains unverified.
+
+Inbox verified: 4 widget tests pass for the empty state and temporary-storage notice, trimmed title capture and input clearing, blank-title rejection, and keyboard submission in capture order. `flutter analyze` reports no issues. The app builds and launches on `emulator-5554`; adb input and screenshots confirm empty and populated inboxes. Tasks are temporary in-memory titles, not saved to Python. Styling takes inspiration from Barrett's supplied reference; ranking, filtering, and navigation are not implemented.
+
+Verification: the Android inbox accepts and displays titles; the temporary-storage boundary is explicit.
+
+## 17. Server-backed framework setup
+
+Agreed scope and ownership are in `docs/framework-plan.md`; the shared HTTP contract is in `docs/api-contract.md`. Existing Frontend and Backend agents implement separate paths and each obtains its own Sol 6.1/high review with iterative fixes.
+
+- [x] Plan the framework setup and freeze the first HTTP contract.
+- [x] Backend: add and test the HTTP interface over existing capture/inbox operations.
+- [x] Backend: add Docker/Compose, health checks, and persistent SQLite volume configuration.
+- [x] Frontend: replace temporary storage with an HTTP client and loading/error/retry/capture state.
+- [x] Frontend: verify Android builds and add a minimal web target.
+- [x] Complete both independent review/fix cycles and rerun checks.
+- [x] Verify integrated capture/list and storage across container/app restarts.
+- [x] Verify browser behavior against the API with explicit CORS configuration.
+- [ ] Verify physical-phone connectivity and behavior.
+
+Backend verified: coordinator independently ran `uv run pytest` (175 passed; 1 upstream Starlette/httpx deprecation warning), coverage (98.93% overall lines; core 100%), lock validation, Compose config validation, and whitespace checks. An isolated Docker project passed health, real capture/list, allowed-origin CORS preflight/error checks, and exact snapshot retention across forced container recreation. Backend's required Sol 6.1/high reviewer found JSON-parser and invalid-Unicode handling issues; regression tests and follow-up review passed.
+
+Frontend verified: coordinator independently ran analysis (no issues), 25 passing tests, and the web build. Frontend reported final debug/release APK builds; coordinator installed the debug APK and independently checked both merged manifests for INTERNET permission and debug-only cleartext networking. Its explicit Sol 6.1/high reviewer approved the final source after fixes for refresh reactivity, guarded uncertain-write resubmission, stale state, origin/response validation, timestamps, and read/write merge races.
+
+Integrated verification: Android emulator and Firefox web UI both captured into the same real SQLite inbox. Android app and browser page restarts reloaded saved tasks; exact task snapshots survived forced container recreation. Stopping the backend produced visible stale/unavailable warnings in both clients; refresh/retry recovered. A disconnected Android POST preserved its draft without queued retries. Browser fault injection dropped a response after a real save: the UI warned of an unknown outcome, kept the draft, and refresh revealed exactly 1 saved task without resubmitting. Physical-phone checks remain pending.
+
+Only check off implementation after its tests/reviews pass. Browser and phone checks remain pending unless actually performed. Do not implement the unfinished ranking, recurrence, or eligibility roadmap in this step.
