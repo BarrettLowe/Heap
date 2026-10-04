@@ -50,6 +50,23 @@ To check coverage:
 uv run pytest --cov=heap --cov-report=term-missing --cov-fail-under=80
 ```
 
+## Continuous integration and container images
+
+GitHub Actions runs the Python tests (with an 80% coverage minimum), Flutter
+analysis and tests, and a Docker build/smoke test on every pull request. The smoke
+test checks API health, task capture, and SQLite persistence after replacing the
+container. CI uses Python 3.12, uv 0.9.22, and Flutter 3.47.6; dependencies are
+installed from the committed lockfiles.
+
+After all checks pass, pushes to `master` publish the backend container to
+`ghcr.io/barrettlowe/heap:latest` and `ghcr.io/barrettlowe/heap:sha-<full-commit-sha>`.
+Version tags such as `v0.1.0` also publish a `0.1.0` image tag; they do not move
+`latest`. Pull requests never publish images. The workflow can also be run
+manually; publishing is enabled only when `master` is selected.
+
+Publishing uses GitHub's built-in `GITHUB_TOKEN`; no registry secret is needed.
+See [Backend setup](docs/backend.md#run-a-published-image) for deployment commands.
+
 ## First working slice
 
 `TaskOperator.capture(title)` creates an inbox task and explicitly saves it through
