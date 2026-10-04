@@ -54,7 +54,17 @@ def test_capture_returns_saved_task_with_contract_utc_format(
     assert body["updated_at"] == body["created_at"]
 
     with client_for(database) as client:
-        assert client.get("/api/v1/inbox").json() == {"items": [body]}
+        assert client.get("/api/v1/inbox").json() == {
+            "items": [
+                {
+                    **body,
+                    "priority": None,
+                    "duration_minutes": None,
+                    "externally_blocked": False,
+                    "project_id": None,
+                }
+            ]
+        }
 
 
 def test_inbox_empty_and_method_not_allowed_include_contract_error(

@@ -233,12 +233,20 @@ Dependency blocking is a derived condition, not a stored lifecycle status.
 It results from incomplete task dependencies. External blocking is recorded
 separately as a fully manual boolean.
 
-Moving an inbox task on-deck requires an assigned priority and known duration.
-Project membership is optional. Repeating the move does not reset timestamps.
-Clearing priority or resetting duration to unknown returns an on-deck task to
-the inbox, clears `on_deck_since`, and updates the meaningful-change timestamp
-in the same save. Restoring the missing value does not automatically move the
-task on-deck; an explicit move starts a new on-deck timestamp.
+On-deck membership is the query of unfinished tasks with an assigned priority
+and known duration. Project membership is optional; there is no separately
+chosen membership flag or move-on-deck action. Keep `on_deck_since` to track
+time on-deck for possible future ranking. Ordinary qualifying edits preserve
+that timestamp. Clearing a requirement returns the task to the inbox and
+clears its age; restoring requirements qualifies it automatically and starts
+a new age at the actual operation time.
+
+“Hidden” was a wording mistake: awaiting external dependencies uses the
+existing fully manual `externally_blocked` flag, not a separate hiding feature.
+Organized waiting tasks remain in the on-deck pool, clearly marked; blocking
+and organization are separate concerns. The earlier explicit-move policy is
+superseded. Existing qualifying Inbox snapshots are normalized atomically at
+startup before the server becomes healthy; GETs do not mutate task state.
 
 Additional internal states may be introduced if justified.
 

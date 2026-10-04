@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -36,9 +37,26 @@ class TaskOperator:
         self._store.save(task)
         return task
 
+    def get(self, task_id: UUID) -> Task:
+        """Return a fresh task snapshot; missing IDs raise KeyError."""
+        task = self._store.get(task_id)
+        if task is None:
+            raise KeyError(task_id)
+        return task
+
     def list_inbox(self) -> list[Task]:
         """Return inbox snapshots oldest-first, breaking timestamp ties by ID."""
         return self._store.list_inbox()
+
+    def list_on_heap(self) -> list[Task]:
+        """Return snapshots on the heap oldest-first, breaking ties by ID."""
+        return self._store.list_on_heap()
+
+    def list_for_project(self, project_id: UUID) -> list[Task]:
+        """Return all assigned task snapshots; unknown projects raise KeyError."""
+        if self._project_store is None or self._project_store.get(project_id) is None:
+            raise KeyError(project_id)
+        return self._store.list_for_project(project_id)
 
     def complete(self, task_id: UUID) -> Task:
         """Retain a task as completed; repeated completion leaves it unchanged.
@@ -127,8 +145,101 @@ class TaskOperator:
                 raise KeyError(task_id)
         return blocking
 
-    def move_to_on_deck(self, task_id: UUID) -> Task:
-        """Move an organized inbox task on-deck, preserving time on repeated calls.
+    def organize_task(
+        self,
+        task_id: UUID,
+        *,
+        title: str,
+        priority: Priority | None,
+        duration: Duration,
+        externally_blocked: bool,
+        project_id: UUID | None = None,
+    ) -> Task:
+        """Replace editor fields together and derive placement from requirements.
+
+        Missing IDs raise KeyError; completed tasks raise ValueError.
+        Unchanged final snapshots do not read time or save.
+        """
+        task = self.get(task_id)
+        if task.status is TaskStatus.COMPLETED:
+            raise ValueError("A completed task cannot be organized")
+        if project_id is not None and project_id != task.project_id:
+            if self._project_store is None:
+                raise ValueError("Project assignment requires a project store")
+            if self._project_store.get(project_id) is None:
+                raise KeyError(project_id)
+        return self._save_edit(
+            task,
+            replace(
+                task,
+                title=title,
+                priority=priority,
+                duration=duration,
+                externally_blocked=externally_blocked,
+                project_id=project_id,
+            ),
+        )
+
+    @staticmethod
+    def _qualifies(task: Task) -> bool:
+        """Check organization requirements independently of blocking flags."""
+        return (
+            task.status is not TaskStatus.COMPLETED
+            and task.priority is not None
+            and task.duration is not Duration.UNKNOWN
+        )
+
+    @staticmethod
+    def _derive_organization(task: Task) -> None:
+        """Derive unfinished placement, leaving entry time for the saving operation."""
+        if task.status is TaskStatus.COMPLETED:
+            return
+        if TaskOperator._qualifies(task):
+            if task.status is not TaskStatus.ON_HEAP:
+                task.on_heap_since = None
+            task.status = TaskStatus.ON_HEAP
+        else:
+            task.status = TaskStatus.INBOX
+            task.on_heap_since = None
+
+    def _save_edit(self, original: Task, edited: Task) -> Task:
+        """Save a changed final snapshot once with one operation time read."""
+        self._derive_organization(edited)
+        needs_entry_time = (
+            edited.status is TaskStatus.ON_HEAP and edited.on_heap_since is None
+        )
+        if edited == original and not needs_entry_time:
+            return original
+        now = current_time()
+        if needs_entry_time:
+            edited.on_heap_since = now
+        edited.updated_at = now
+        self._store.save(edited)
+        return edited
+
+    def normalize_organization(self) -> int:
+        """Atomically promote qualifying legacy Inbox snapshots using actual time.
+
+        Already-normalized and unrelated snapshots are untouched. Empty work
+        reads no time and saves nothing; failed persistence reports no count.
+        """
+        tasks = [
+            task
+            for task in self._store.list_unfinished()
+            if task.status is TaskStatus.INBOX and self._qualifies(task)
+        ]
+        if not tasks:
+            return 0
+        now = current_time()
+        for task in tasks:
+            task.status = TaskStatus.ON_HEAP
+            task.on_heap_since = now
+            task.updated_at = now
+        self._store.save_many(tasks)
+        return len(tasks)
+
+    def move_to_heap(self, task_id: UUID) -> Task:
+        """Compatibility call to normalize a qualifying task's organization.
 
         Missing IDs raise KeyError. Completed tasks and tasks missing priority
         or duration raise ValueError. Project membership is optional.
@@ -136,42 +247,29 @@ class TaskOperator:
         task = self._store.get(task_id)
         if task is None:
             raise KeyError(task_id)
-        if task.status is TaskStatus.ON_DECK:
-            return task
         if task.status is TaskStatus.COMPLETED:
-            raise ValueError("A completed task cannot move on-deck")
+            raise ValueError("A completed task cannot move onto the heap")
         if task.priority is None:
-            raise ValueError("Moving on-deck requires an assigned priority")
+            raise ValueError("Moving onto the heap requires an assigned priority")
         if task.duration is Duration.UNKNOWN:
-            raise ValueError("Moving on-deck requires a known duration")
-        now = current_time()
-        task.status = TaskStatus.ON_DECK
-        task.on_deck_since = now
-        task.updated_at = now
-        self._store.save(task)
-        return task
+            raise ValueError("Moving onto the heap requires a known duration")
+        return self._save_edit(task, replace(task))
 
     def set_externally_blocked(self, task_id: UUID, externally_blocked: bool) -> Task:
         """Save the manual external-blocking flag; missing task IDs raise KeyError."""
         task = self._store.get(task_id)
         if task is None:
             raise KeyError(task_id)
-        if task.externally_blocked != externally_blocked:
-            task.externally_blocked = externally_blocked
-            task.updated_at = current_time()
-            self._store.save(task)
-        return task
+        return self._save_edit(
+            task, replace(task, externally_blocked=externally_blocked)
+        )
 
     def set_title(self, task_id: UUID, title: str) -> Task:
         """Save a title change; missing task IDs raise KeyError."""
         task = self._store.get(task_id)
         if task is None:
             raise KeyError(task_id)
-        if task.title != title:
-            task.title = title
-            task.updated_at = current_time()
-            self._store.save(task)
-        return task
+        return self._save_edit(task, replace(task, title=title))
 
     def set_project(self, task_id: UUID, project_id: UUID | None) -> Task:
         """Assign an existing project or clear it; missing IDs raise KeyError.
@@ -186,42 +284,24 @@ class TaskOperator:
                 raise ValueError("Project assignment requires a project store")
             if self._project_store.get(project_id) is None:
                 raise KeyError(project_id)
-        if task.project_id != project_id:
-            task.project_id = project_id
-            task.updated_at = current_time()
-            self._store.save(task)
-        return task
+        return self._save_edit(task, replace(task, project_id=project_id))
 
     def set_priority(self, task_id: UUID, priority: Priority | None) -> Task:
-        """Save priority; clearing it returns on-deck tasks to the inbox.
+        """Save priority and automatically derive unfinished task placement.
 
         Missing task IDs raise KeyError.
         """
         task = self._store.get(task_id)
         if task is None:
             raise KeyError(task_id)
-        if task.priority != priority:
-            task.priority = priority
-            if priority is None and task.status is TaskStatus.ON_DECK:
-                task.status = TaskStatus.INBOX
-                task.on_deck_since = None
-            task.updated_at = current_time()
-            self._store.save(task)
-        return task
+        return self._save_edit(task, replace(task, priority=priority))
 
     def set_duration(self, task_id: UUID, duration: Duration) -> Task:
-        """Save duration; unknown returns on-deck tasks to the inbox.
+        """Save duration and automatically derive unfinished task placement.
 
         Missing task IDs raise KeyError.
         """
         task = self._store.get(task_id)
         if task is None:
             raise KeyError(task_id)
-        if task.duration != duration:
-            task.duration = duration
-            if duration is Duration.UNKNOWN and task.status is TaskStatus.ON_DECK:
-                task.status = TaskStatus.INBOX
-                task.on_deck_since = None
-            task.updated_at = current_time()
-            self._store.save(task)
-        return task
+        return self._save_edit(task, replace(task, duration=duration))

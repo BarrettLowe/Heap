@@ -3,9 +3,15 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:heap_app/heap_api.dart';
+import 'package:heap_app/heap_style.dart';
 import 'package:heap_app/main.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+
+String captureJson(Map<String, Object?> task) => jsonEncode({
+  for (final field in ['id', 'title', 'status', 'created_at', 'updated_at'])
+    field: task[field],
+});
 
 void main() {
   testWidgets(
@@ -21,7 +27,13 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Heap'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(HeapBrand),
+          matching: find.text('Heap'),
+        ),
+        findsOneWidget,
+      );
       expect(find.byKey(const Key('empty-inbox')), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       client.close();
@@ -31,7 +43,10 @@ void main() {
   testWidgets(
     'refresh stays enabled and unknown saves require warned resubmission',
     (tester) async {
-      final task = <String, String>{
+      final task = <String, Object?>{
+        'priority': null,
+        'duration_minutes': null,
+        'externally_blocked': false,
         'id': 'd4be2fc9-49b7-46a6-9981-1f063eed03ea',
         'title': 'Possible duplicate',
         'status': 'inbox',
@@ -54,7 +69,7 @@ void main() {
         postCount++;
         if (postCount == 1) return http.Response('server failure', 500);
         saved = true;
-        return http.Response(jsonEncode(task), 201);
+        return http.Response(captureJson(task), 201);
       });
       await tester.pumpWidget(
         HeapApp(
@@ -66,6 +81,8 @@ void main() {
         tester.widget<IconButton>(find.byKey(const Key('refresh'))).onPressed,
         isNotNull,
       );
+      await tester.tap(find.byKey(const Key('open-capture')));
+      await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const Key('task-title')),
         'Possible duplicate',
@@ -82,7 +99,7 @@ void main() {
         tester.widget<FilledButton>(find.byKey(const Key('capture'))).onPressed,
         isNull,
       );
-      await tester.tap(find.byKey(const Key('refresh')));
+      await tester.tap(find.byKey(const Key('capture-refresh')));
       await tester.pumpAndSettle();
       expect(getCount, 2);
       expect(find.textContaining('may create a duplicate'), findsOneWidget);
@@ -99,7 +116,10 @@ void main() {
   testWidgets('capture posts to the server and only then shows the task', (
     tester,
   ) async {
-    final task = <String, String>{
+    final task = <String, Object?>{
+      'priority': null,
+      'duration_minutes': null,
+      'externally_blocked': false,
       'id': 'd4be2fc9-49b7-46a6-9981-1f063eed03ea',
       'title': 'Fix driveway washout',
       'status': 'inbox',
@@ -119,13 +139,15 @@ void main() {
       expect(request.method, 'POST');
       expect(jsonDecode(request.body), {'title': 'Fix driveway washout'});
       saved = true;
-      return http.Response(jsonEncode(task), 201);
+      return http.Response(captureJson(task), 201);
     });
     await tester.pumpWidget(
       HeapApp(
         api: HeapApi(client: client, baseUri: Uri.parse('http://test')),
       ),
     );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('open-capture')));
     await tester.pumpAndSettle();
     await tester.enterText(
       find.byKey(const Key('task-title')),
@@ -134,6 +156,8 @@ void main() {
     await tester.tap(find.byKey(const Key('capture')));
     await tester.pumpAndSettle();
     expect(find.text('Fix driveway washout'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('open-capture')));
+    await tester.pumpAndSettle();
     expect(
       tester
           .widget<TextField>(find.byKey(const Key('task-title')))

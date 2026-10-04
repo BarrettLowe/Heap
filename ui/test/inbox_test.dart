@@ -5,6 +5,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:heap_app/heap_api.dart';
 import 'package:heap_app/inbox_controller.dart';
 import 'package:heap_app/main.dart';
+import 'package:heap_app/task_lists_page.dart';
+
+import 'task_flow_fakes.dart';
+
+Widget inboxHost(InboxController controller) => MaterialApp(
+  home: TaskListsPage(inbox: controller, organization: FakeOrganization()),
+);
+Future<void> openCapture(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('open-capture')));
+  await tester.pumpAndSettle();
+}
 
 final savedTask = InboxTask(
   id: 'd4be2fc9-49b7-46a6-9981-1f063eed03ea',
@@ -40,9 +51,7 @@ void main() {
     final pending = Completer<List<InboxTask>>();
     final service = FakeInboxService()..onList = () => pending.future;
     final controller = InboxController(service);
-    await tester.pumpWidget(
-      MaterialApp(home: InboxPage(controller: controller)),
-    );
+    await tester.pumpWidget(inboxHost(controller));
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     expect(find.byKey(const Key('empty-inbox')), findsNothing);
     pending.complete([]);
@@ -63,11 +72,9 @@ void main() {
       return const [];
     };
     final fakeController = InboxController(service);
-    await tester.pumpWidget(
-      MaterialApp(home: InboxPage(controller: fakeController)),
-    );
+    await tester.pumpWidget(inboxHost(fakeController));
     await tester.pumpAndSettle();
-    expect(find.text('Could not load the inbox.'), findsNothing);
+    expect(find.text('Could not load the inbox.'), findsOneWidget);
     expect(find.text('Could not reach the server.'), findsOneWidget);
     await tester.tap(find.text('Retry'));
     await tester.pumpAndSettle();
@@ -80,10 +87,9 @@ void main() {
   testWidgets('blank capture does not send or clear the draft', (tester) async {
     final service = FakeInboxService();
     final controller = InboxController(service);
-    await tester.pumpWidget(
-      MaterialApp(home: InboxPage(controller: controller)),
-    );
+    await tester.pumpWidget(inboxHost(controller));
     await tester.pumpAndSettle();
+    await openCapture(tester);
     await tester.enterText(find.byKey(const Key('task-title')), '   ');
     await tester.tap(find.byKey(const Key('capture')));
     await tester.pumpAndSettle();
@@ -226,10 +232,9 @@ void main() {
         });
       };
       final controller = InboxController(service);
-      await tester.pumpWidget(
-        MaterialApp(home: InboxPage(controller: controller)),
-      );
+      await tester.pumpWidget(inboxHost(controller));
       await tester.pumpAndSettle();
+      await openCapture(tester);
 
       await tester.enterText(find.byKey(const Key('task-title')), 'keep me');
       await tester.tap(find.byKey(const Key('capture')));

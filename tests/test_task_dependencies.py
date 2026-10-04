@@ -47,7 +47,7 @@ def test_multiple_dependencies_and_shared_prerequisite_survive_reopening(
         tasks = TaskOperator(store)
         tasks.set_priority(paint.id, Priority.P2)
         tasks.set_duration(paint.id, Duration.THIRTY_MINUTES)
-        before = tasks.move_to_on_deck(paint.id)
+        before = tasks.move_to_heap(paint.id)
         monkeypatch.setattr(task_operator, "current_time", lambda: EDITED)
         assert tasks.add_dependency(paint.id, supplies.id) is None
         tasks.add_dependency(paint.id, drywall.id)
@@ -278,7 +278,7 @@ def test_database_without_dependency_table_keeps_existing_tasks(
         tasks = TaskOperator(store)
         tasks.set_priority(paint.id, Priority.P2)
         tasks.set_duration(paint.id, Duration.THIRTY_MINUTES)
-        on_deck = tasks.move_to_on_deck(paint.id)
+        on_heap = tasks.move_to_heap(paint.id)
         completed = tasks.complete(drywall.id)
 
     with closing(sqlite3.connect(database)) as connection:
@@ -286,12 +286,12 @@ def test_database_without_dependency_table_keeps_existing_tasks(
         connection.commit()
 
     with SQLiteTaskStore(database) as store:
-        assert store.get(paint.id) == on_deck
+        assert store.get(paint.id) == on_heap
         assert store.get(drywall.id) == completed
         monkeypatch.setattr(task_operator, "current_time", lambda: EDITED)
         TaskOperator(store).add_dependency(paint.id, drywall.id)
 
     with SQLiteTaskStore(database) as store:
-        assert store.get(paint.id) == replace(on_deck, updated_at=EDITED)
+        assert store.get(paint.id) == replace(on_heap, updated_at=EDITED)
         assert store.get(drywall.id) == completed
         assert TaskOperator(store).list_dependencies(paint.id) == [drywall.id]

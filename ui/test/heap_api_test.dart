@@ -7,12 +7,15 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
-  final taskJson = <String, Object>{
+  final taskJson = <String, Object?>{
     'id': 'd4be2fc9-49b7-46a6-9981-1f063eed03ea',
     'title': 'Fix driveway washout',
     'status': 'inbox',
     'created_at': '2026-10-03T12:34:56.123456Z',
     'updated_at': '2026-10-03T12:34:56.123456Z',
+    'priority': null,
+    'duration_minutes': null,
+    'externally_blocked': false,
   };
 
   test('GET uses the contract path and parses immutable inbox tasks', () async {
@@ -42,7 +45,15 @@ void main() {
       expect(request.url.path, '/api/v1/tasks');
       expect(request.headers['content-type'], 'application/json');
       expect(jsonDecode(request.body), {'title': 'Fix driveway washout'});
-      return http.Response(jsonEncode(taskJson), 201);
+      final captureJson = Map<String, Object?>.from(taskJson)
+        ..removeWhere(
+          (key, _) => {
+            'priority',
+            'duration_minutes',
+            'externally_blocked',
+          }.contains(key),
+        );
+      return http.Response(jsonEncode(captureJson), 201);
     });
     final result = await HeapApi(
       client: client,
@@ -96,7 +107,7 @@ void main() {
       for (final response in [
         http.Response('server failure', 500),
         http.Response('{"wrong":"shape"}', 201),
-        http.Response(jsonEncode({...taskJson, 'status': 'on_deck'}), 201),
+        http.Response(jsonEncode({...taskJson, 'status': 'on_heap'}), 201),
         http.Response(jsonEncode({...taskJson, 'id': 'NOT-A-UUID'}), 201),
         http.Response(
           jsonEncode({...taskJson, 'created_at': '2026-10-03'}),

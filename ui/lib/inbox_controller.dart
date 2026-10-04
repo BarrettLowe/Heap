@@ -1,12 +1,14 @@
 import 'package:flutter/foundation.dart';
 
 import 'heap_api.dart';
+import 'task_detail.dart';
 
 class InboxController extends ChangeNotifier {
   InboxController(this._api);
 
   final InboxService _api;
   List<InboxTask> _tasks = const [];
+  InboxTask? _lastCaptured;
   bool _loading = false;
   bool _loaded = false;
   bool _saving = false;
@@ -19,6 +21,7 @@ class InboxController extends ChangeNotifier {
   bool _disposed = false;
 
   List<InboxTask> get tasks => _tasks;
+  InboxTask? get lastCaptured => _lastCaptured;
   bool get loading => _loading;
   bool get loaded => _loaded;
   bool get saving => _saving;
@@ -73,6 +76,7 @@ class InboxController extends ChangeNotifier {
     try {
       final task = await _api.capture(title.trim());
       if (_disposed) return false;
+      _lastCaptured = task;
       _unknownOutcome = false;
       _refreshedAfterUnknown = false;
       ++_readVersion;
@@ -109,6 +113,29 @@ class InboxController extends ChangeNotifier {
       _notify();
       return false;
     }
+  }
+
+  void invalidate() {
+    ++_readVersion;
+    _loading = false;
+    _stale = _loaded;
+    _notify();
+  }
+
+  void applyConfirmed(TaskDetail task) {
+    invalidate();
+    final merged =
+        <InboxTask>[
+          ..._tasks.where((item) => item.id != task.id),
+          if (task.status == 'inbox') task,
+        ]..sort((first, second) {
+          final byTime = first.createdAt.compareTo(second.createdAt);
+          return byTime != 0 ? byTime : first.id.compareTo(second.id);
+        });
+    _tasks = List.unmodifiable(merged);
+    if (task.status == 'inbox') _loaded = true;
+    _stale = _loaded;
+    _notify();
   }
 
   void _notify() {

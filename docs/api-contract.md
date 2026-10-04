@@ -1,18 +1,29 @@
 # Heap HTTP contract
 
-This is the shared contract for the first server-backed inbox. Python owns behavior and storage. Flutter does not save locally, queue writes, rank tasks, or calculate eligibility. Both agents must coordinate contract changes with the coordinator before implementing them.
+**Approved revision:** automatic organization, manual external waiting, and retained time-on-deck tracking. Barrett approved implementation after planning. This replaces the prior explicit-move contract. No ranking engine or hidden-task feature is added.
 
-## Requests and responses
+Python owns rules and durable storage. Flutter is server-backed: no disk task cache, queued writes, automatic write retries, or offline synchronization. Contract changes remain coordinator-owned.
 
-Use these exact paths without trailing slashes. JSON uses UTF-8. Clients do not supply IDs or timestamps. There are no credentials or idempotency keys in this slice.
+## Routes
 
-| Method and path | Request | Successful response |
+Use these exact paths without trailing slashes. JSON uses UTF-8. There are no credentials or idempotency keys in this slice.
+
+| Method and path | Request | Success |
 | --- | --- | --- |
-| `GET /healthz` | No body | `200 {"status":"ok"}` after database initialization |
-| `GET /api/v1/inbox` | No body | `200 {"items":[InboxTask, ...]}` |
-| `POST /api/v1/tasks` | JSON `{"title":"Fix driveway washout"}` | `201 InboxTask`, only after saving |
+| `GET /healthz` | None | `200 {"status":"ok"}` after initialization and normalization |
+| `POST /api/v1/tasks` | `{"title":"Fix driveway washout"}` | `201 CaptureTask`, after persistence |
+| `GET /api/v1/inbox` | None | `200 {"items":[InboxTask,...]}` |
+| `GET /api/v1/tasks/{task_id}` | None | `200 TaskDetail` |
+| `GET /api/v1/on-deck` | None | `200 {"items":[TaskDetail,...]}` |
+| `PUT /api/v1/tasks/{task_id}/organization` | Full editor fields and comparison token | `200 TaskDetail`, after persistence or confirmed no-op |
 
-An `InboxTask` has exactly these fields:
+IDs are lowercase canonical hyphenated UUID strings. Invalid path UUIDs produce `422 invalid_request`; missing tasks produce `404 not_found`. Dates use exact UTC `YYYY-MM-DDTHH:MM:SS.ffffffZ`, including zero microseconds. Preserve the comparison token exactly; it is not an operation time.
+
+## Capture and Inbox
+
+Capture remains title-only. Require a strict string, trim surrounding whitespace, reject blank/invalid-Unicode titles and extra fields. Do not impose an invented length limit. Clients never supply IDs or timestamps.
+
+`CaptureTask` retains the original 5-field response:
 
 ```json
 {
@@ -24,58 +35,130 @@ An `InboxTask` has exactly these fields:
 }
 ```
 
-- IDs are lowercase canonical hyphenated UUID strings.
-- Timestamps are RFC 3339 UTC with a `Z` suffix and 6 fractional digits. Python supplies them; capture timestamps are equal.
-- Listing uses the existing oldest-first inbox ordering, with ID tie-breaking. Other statuses do not appear. An empty list is `{"items":[]}`. This slice has no pagination.
-- Capture accepts only a strictly string-valued `title`. Trim surrounding whitespace, reject an empty result, and reject extra fields. This is HTTP input validation, not a claim that the existing Python core validates titles. Do not invent a length limit.
-- Clients may ignore future additional response fields, but the server returns only the fields specified here for now.
+Creation guarantees unset priority, unknown duration, and `externally_blocked=false`. Creation timestamps are equal. These defaults apply to confirmed title-only creation, not arbitrary missing list metadata.
 
-## Errors
-
-Every application API error has this shape:
+`InboxTask` returned by the bulk GET adds 3 required fields to the original 5:
 
 ```json
 {
-  "error": {
-    "code": "invalid_request",
-    "message": "Request validation failed.",
-    "fields": [
-      {"field": "title", "message": "Must not be blank."}
-    ]
-  }
+  "id": "d4be2fc9-49b7-46a6-9981-1f063eed03ea",
+  "title": "Fix driveway washout",
+  "status": "inbox",
+  "created_at": "2026-10-03T12:34:56.123456Z",
+  "updated_at": "2026-10-03T12:34:56.123456Z",
+  "priority": 2,
+  "duration_minutes": null,
+  "externally_blocked": true
 }
 ```
 
-`fields` is always a list; non-field errors use `[]`. Clients use status and code rather than matching human-readable messages. API validation errors must not expose raw request bodies. Unexpected failures are logged server-side without returning traceback or database details to the client.
+Inbox contains unfinished tasks missing priority or known duration. Order remains ascending creation time, then ID. Empty lists are `{"items":[]}`. No pagination. Older clients may ignore additive metadata; new bulk-list rendering must validate its presence/types rather than guess or GET each row separately. Preserve original capture tests/behavior; update list fixtures where the additive response requires it.
 
-| HTTP status | Code | Meaning |
+## Detail and On-deck
+
+`TaskDetail` has these 9 fields:
+
+```json
+{
+  "id": "d4be2fc9-49b7-46a6-9981-1f063eed03ea",
+  "title": "Fix driveway washout",
+  "status": "on_deck",
+  "created_at": "2026-10-03T12:34:56.123456Z",
+  "updated_at": "2026-10-04T09:00:00.123456Z",
+  "priority": 2,
+  "duration_minutes": 30,
+  "on_deck_since": "2026-10-04T09:00:00.123456Z",
+  "externally_blocked": true
+}
+```
+
+- Status: `inbox`, `on_deck`, or `completed`. Completed detail is readable; organization writes are rejected.
+- Priority: null or strict integer 1–5. Labels: P1 Critical, P2 Important, P3 Normal, P4 Someday, P5 Maybe. P1 is highest.
+- Duration: null (Unknown) or strict integer minutes 5/15/30/60/120/240.
+- Waiting: required strict boolean `externally_blocked`, manually edited only. No hiding field, reason text, or automatic updates.
+- `on_deck_since`: canonical UTC or null; On-deck requires a timestamp. Completed tasks may retain an earlier timestamp.
+
+On-deck membership is qualifying unfinished work: priority assigned and duration known. It is not a separate manual flag/action. Both waiting and prerequisite-blocked tasks remain in this organized pool, with waiting clearly marked. This is not an actionable-only recommendation view or ranking. List order remains ascending `on_deck_since`, then ID. Queries should express qualification rather than rely on an independently editable membership choice; persisted lifecycle snapshots may remain an internal representation maintained by operations. Inbox and On-deck must partition unfinished tasks consistently.
+
+## One atomic organization Save
+
+PUT requires all 5 fields:
+
+```json
+{
+  "title": "Fix driveway washout",
+  "priority": 2,
+  "duration_minutes": 30,
+  "externally_blocked": true,
+  "expected_updated_at": "2026-10-03T12:34:56.123456Z"
+}
+```
+
+Missing priority/duration is invalid; explicit null clears them. Waiting is required, never nullable/default-false. Load it from fresh detail and submit the draft value. Reject booleans/floats/numeric strings for integers, unsupported enum values, malformed tokens, invalid titles, and extra fields. **`move_to_on_deck` is removed; any supplied value, including false, is an extra field and produces 422.** Missing organization requirements are valid saves to Inbox, not validation failures.
+
+Check fresh missing/completed/stale state and apply the complete operation inside the existing serialized boundary:
+
+- Missing: `404 not_found`.
+- Completed: `409 task_completed`, including unchanged requests.
+- Saved token differs: `409 task_conflict` without edits.
+- Invalid body: `422 invalid_request` without edits.
+- Unchanged final snapshot: return it without saving or reading time.
+- Meaningful change: read UTC once; replace title/priority/duration/waiting and derived organization together; save once. Failed saves cannot partially persist.
+
+Final organization follows these rules:
+
+| Unfinished final snapshot | Placement / age |
+| --- | --- |
+| Priority assigned and duration known | On-deck automatically |
+| Either requirement missing | Inbox; `on_deck_since=null` |
+| Still On-deck after ordinary edits | Preserve exact age |
+| Entering/re-entering On-deck | New age from actual operation time |
+| Waiting checked/cleared alone | No independent effect on membership, age, priority, or ordering |
+
+Preserve IDs, creation time, project, completion data, dependency links, and every unrelated field. Existing snapshot-edit operations must apply the same organization policy; completed tasks never resurrect. Legacy Python `move_to_on_deck` may remain an idempotent compatibility operation, but no HTTP/UI uses it.
+
+### Existing data and startup
+
+Before publishing a healthy app, explicitly normalize existing qualifying Inbox snapshots through the operator. Select qualifying tasks in Python, retain unrelated fields/manual flags, read UTC once only if changes exist, and persist all normalized snapshots in 1 atomic batch. Actual normalization time supplies their new age/update token; never invent historical ages. Existing On-deck/completed/incomplete Inbox snapshots remain untouched. Failure aborts startup and rolls back the batch. No schema field or migration marker is needed; repeated normalization is a no-op. GET/list handlers remain read-only.
+
+## Errors
+
+```json
+{"error":{"code":"invalid_request","message":"Request validation failed.","fields":[{"field":"title","message":"Must not be blank."}]}}
+```
+
+`fields` is always a list; non-field errors use `[]`. Use status/code, not message matching. Do not expose raw request bodies, traceback, or database details.
+
+| Status | Code | Meaning |
 | --- | --- | --- |
-| `422` | `invalid_request` | Malformed JSON, missing/wrong/extra fields, or blank title; no write |
-| `415` | `unsupported_media_type` | POST is not JSON; no write |
-| `404` | `not_found` | Unknown path |
-| `405` | `method_not_allowed` | Unsupported method; preserve the `Allow` header |
-| `500` | `internal_error` | Unexpected failure; generic client message |
+| 422 | `invalid_request` | Invalid JSON/path/body; no write |
+| 415 | `unsupported_media_type` | Non-JSON write; no write |
+| 404 | `not_found` | Missing task/path |
+| 405 | `method_not_allowed` | Unsupported method; retain Allow header |
+| 409 | `task_completed` / `task_conflict` | Terminal/stale organization attempt |
+| 500 | `internal_error` | Generic unexpected failure; write outcome may be uncertain |
 
-There are no organization, ranking, recurrence, task-detail, or authentication endpoints yet. This is a private-network skeleton, not a public authenticated deployment.
+## Client recovery and confirmed updates
 
-## Client behavior
+- GET fresh known-ID detail before editing; separate saved snapshot, draft, submitted draft, and fetched comparison.
+- One Save; valid unchanged saves allowed. Checkbox changes only the draft. Dirty back/cancel offers Keep editing/Discard changes. Disable submission, fields, and route departure during PUT.
+- Preserve drafts on rejection, conflict, unavailability, and uncertain saves. Missing/completed snapshots are read-only.
+- Confirmed Save updates/removes/upserts the known ID in both lists, invalidates obsolete reads, and navigates to the returned status before refreshing both lists. Refresh failure remains a successful Save, with persistent `Saved, but lists could not be refreshed.` and stale labeling.
+- Delayed refresh must never steal focus from a newer capture interaction or navigation. Keep scroll positions and accessible focus without replaying stale restoration.
+- Timeout, lost response, malformed/wrong-ID success, or 5xx means PUT may have succeeded. No automatic retry or POST duplication. Recovery GET uses the same known ID.
+- Match trimmed submitted title, nullable priority/duration, waiting boolean, and automatic intended status (qualification independent of waiting). A match confirms current state, not request attribution.
+- Differing/unchanged GET retains uncertainty: the earlier write may still finish. Explicit Use saved version adopts all fetched values; Keep my edits keeps the displayed draft's 4 fields and adopts the fetched token/status. Clearly explain that a later deliberate Save replaces all 4 server fields, including waiting. Neither choice writes automatically.
+- Failed reconciliation retains draft/warning; missing/completed outcomes remain read-only. Leaving uncertain edits warns that discarding text cannot undo a possible saved write. No disk draft cache.
 
-- Configure the server origin using `--dart-define=HEAP_API_BASE_URL=...`. Missing or invalid configuration is a visible setup error, not a fake empty inbox. Allow only HTTP(S) origins without credentials, query, fragment, or non-root path.
-- Initial loading, server-empty, loaded, and unavailable states must be distinct. Provide GET refresh/retry; do not automatically retry POST.
-- Request timeout: 10 seconds through response-body completion, a starting limit to avoid indefinitely hanging requests.
-- Keep draft text on failure. Disable repeated capture while a POST is pending. Clear only the successfully submitted draft, without erasing newer text typed during the request.
-- Add only server-confirmed captures. Refresh after capture; a refresh failure must not report the already-confirmed capture as failed. Obsolete GET results must not overwrite newer state.
-- Previously loaded tasks may remain visible during failure, but label them stale. Do not represent stale data as a current successful load.
-- A POST timeout, lost response, malformed success response, or server `5xx` has an unknown outcome: it may already have saved. Display "Capture may have succeeded. Refresh the inbox before submitting again." Never retry automatically; any deliberate resubmission must warn about duplicates. Matching a title does not prove that capture succeeded.
-- Android debug builds may use HTTP for local/VPN development. Do not allow broad cleartext in release builds. Add INTERNET permission to the main manifest. Emulator host access uses `http://10.0.2.2:8000`; physical devices need a reachable server/VPN address.
-- Keep shared Dart code web-compatible and add a minimal web target. An HTTPS web page needs an HTTPS API to avoid browser mixed-content blocking.
+Capture keeps its original safeguards: preserve newer input, block duplicate pending POST, clear only confirmed submitted text, refresh before deliberate uncertain resubmission with a duplicate warning. Title matches never confirm capture. GET refresh/retry never repeats a write. A failed refresh cannot turn confirmed capture into failure.
 
-## Backend configuration and access
+## Transport and deployment
 
-- FastAPI + Uvicorn; existing `TaskOperator` and SQLite stores remain authoritative. Keep existing logic and persistence files unchanged in this slice.
-- Run 1 worker, process, and replica. Serialize complete operator calls. Initialize, use, and close SQLite on its owning thread; do not route a shared SQLite connection through FastAPI's synchronous worker threadpool. Other processes must not write the same database concurrently.
-- `HEAP_DATABASE_PATH`: SQLite location; Compose uses `/data/heap.sqlite` in the named `heap-data` volume mounted at `/data`.
-- Container listens on `0.0.0.0:8000`. Host publication defaults to `127.0.0.1:8000`; explicit `HEAP_BIND_ADDRESS` may select the server's VPN interface. Do not default to public exposure.
-- `HEAP_CORS_ORIGINS`: explicit JSON list of permitted web origins; default `[]`, no wildcard or credentials. Allow GET/POST and Content-Type, with OPTIONS preflight and CORS headers on errors for allowed origins.
-- Run as non-root, install locked production dependencies, and include a health check. Document volume retention and the destructive effect of `docker compose down -v`.
-- HTTPS termination/VPN routing stays outside this container. Do not silently open firewall rules, add public exposure, or invent credentials.
+- Configure `HEAP_API_BASE_URL` with an HTTP(S) origin only: no credentials/query/fragment/non-root path. Invalid setup is visible, not fake empty data.
+- 10-second timeout through full response-body completion; no automatic writes/retries.
+- Android debug may use development HTTP; release has INTERNET permission without broad cleartext opt-in and needs HTTPS. Emulator host API is `http://10.0.2.2:18081` for this preview; physical phones require a reachable VPN/server address. HTTPS web pages require HTTPS APIs.
+- FastAPI/Uvicorn; 1 worker/process/replica, complete-operation serialization. Open/use/close SQLite on its owning event-loop thread, not shared sync threadpool routes. Other writers must not use the same DB concurrently. Token protection is not a general multiprocess revision guarantee.
+- `HEAP_DATABASE_PATH`; Compose persists `/data/heap.sqlite` in `heap-data`. Preserve volumes: `docker compose down -v` is destructive.
+- Container `0.0.0.0:8000`, host defaults private `127.0.0.1:8000`; explicit VPN binding supported. No public exposure/firewall/auth expansion.
+- `HEAP_CORS_ORIGINS`: explicit JSON list, no wildcard/credentials. GET/POST/PUT/OPTIONS and Content-Type; CORS on allowed-origin errors.
+- Non-root container, locked production dependencies, health check. HTTPS termination/VPN routing remain external. No dependency/deployment/schema changes required by this revision.

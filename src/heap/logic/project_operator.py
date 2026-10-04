@@ -35,6 +35,26 @@ class ProjectOperator:
         """Retrieve a project snapshot, or None if the ID does not exist."""
         return self._store.get(project_id)
 
+    def list_all(self) -> list[Project]:
+        """Return all projects in the store's stable display order."""
+        return self._store.list_all()
+
+    def update(self, project_id: UUID, name: str, description: str | None) -> Project:
+        """Replace editable fields together; missing projects raise KeyError."""
+        project = self._store.get(project_id)
+        if project is None:
+            raise KeyError(project_id)
+        if project.name != name or project.description != description:
+            project.name = name
+            project.description = description
+            project.updated_at = current_time()
+            self._store.save(project)
+        return project
+
+    def delete(self, project_id: UUID) -> None:
+        """Delete a project and every task assigned to it."""
+        self._store.delete(project_id)
+
     def set_name(self, project_id: UUID, name: str) -> Project:
         """Save a name change; missing project IDs raise KeyError."""
         project = self._store.get(project_id)

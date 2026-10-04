@@ -19,15 +19,15 @@ from heap.persistence.sqlite_task_store import SQLiteTaskStore
 
 
 CREATED: datetime = datetime(2026, 1, 2, 12, 0, tzinfo=UTC)
-ON_DECK: datetime = datetime(2026, 1, 3, 12, 0, tzinfo=UTC)
+ON_HEAP: datetime = datetime(2026, 1, 3, 12, 0, tzinfo=UTC)
 COMPLETED: datetime = datetime(2026, 1, 4, 12, 0, tzinfo=UTC)
 
 
-@pytest.mark.parametrize("on_deck", [False, True])
+@pytest.mark.parametrize("on_heap", [False, True])
 def test_completion_retains_history_after_reopening(
-    tmp_path: Path, monkeypatch: MonkeyPatch, on_deck: bool
+    tmp_path: Path, monkeypatch: MonkeyPatch, on_heap: bool
 ) -> None:
-    """Completion retains inbox and on-deck tasks without altering their history."""
+    """Completion retains inbox and heap tasks without altering their history."""
     database = tmp_path / "heap.sqlite"
     monkeypatch.setattr(task_operator, "current_time", lambda: CREATED)
     with SQLiteProjectStore(database) as project_store:
@@ -37,12 +37,12 @@ def test_completion_retains_history_after_reopening(
             untouched = tasks.capture("Buy fence posts")
             before = tasks.capture("Repair the fence")
             assert before.completed_at is None
-            if on_deck:
+            if on_heap:
                 tasks.set_project(before.id, project.id)
                 tasks.set_priority(before.id, Priority.P2)
                 tasks.set_duration(before.id, Duration.THIRTY_MINUTES)
-                monkeypatch.setattr(task_operator, "current_time", lambda: ON_DECK)
-                before = tasks.move_to_on_deck(before.id)
+                monkeypatch.setattr(task_operator, "current_time", lambda: ON_HEAP)
+                before = tasks.move_to_heap(before.id)
             clock_reads = 0
 
             def completion_time() -> datetime:
@@ -96,7 +96,7 @@ def test_repeated_completion_does_not_save_or_read_time(
         assert store.get(task.id) == completed
 
 
-def test_completed_task_cannot_move_back_on_deck(
+def test_completed_task_cannot_move_back_to_heap(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     """An organized completed task stays completed when a move is rejected."""
@@ -106,18 +106,18 @@ def test_completed_task_cannot_move_back_on_deck(
         task = tasks.capture("Repair the fence")
         tasks.set_priority(task.id, Priority.P2)
         tasks.set_duration(task.id, Duration.THIRTY_MINUTES)
-        tasks.move_to_on_deck(task.id)
+        tasks.move_to_heap(task.id)
         monkeypatch.setattr(task_operator, "current_time", lambda: COMPLETED)
         completed = tasks.complete(task.id)
         with pytest.raises(ValueError, match="completed"):
-            tasks.move_to_on_deck(task.id)
+            tasks.move_to_heap(task.id)
 
     with SQLiteTaskStore(database) as store:
         assert store.get(task.id) == completed
         assert TaskOperator(store).list_inbox() == []
 
 
-@pytest.mark.parametrize("state", ["inbox", "on_deck", "completed"])
+@pytest.mark.parametrize("state", ["inbox", "on_heap", "completed"])
 def test_hard_delete_removes_only_selected_task_after_reopening(
     tmp_path: Path, state: str
 ) -> None:
@@ -130,10 +130,10 @@ def test_hard_delete_removes_only_selected_task_after_reopening(
             untouched = tasks.capture("Buy fence posts")
             task = tasks.capture("Repair the fence")
             tasks.set_project(task.id, project.id)
-            if state == "on_deck":
+            if state == "on_heap":
                 tasks.set_priority(task.id, Priority.P2)
                 tasks.set_duration(task.id, Duration.THIRTY_MINUTES)
-                tasks.move_to_on_deck(task.id)
+                tasks.move_to_heap(task.id)
             elif state == "completed":
                 tasks.complete(task.id)
             assert tasks.delete(task.id) is None
@@ -194,18 +194,18 @@ def test_previous_schema_preserves_tasks_and_supports_completion(
             "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 str(task_id), "Repair the fence", "on_deck",
-                CREATED.isoformat(), ON_DECK.isoformat(),
+                CREATED.isoformat(), ON_HEAP.isoformat(),
                 Priority.P2.value, Duration.THIRTY_MINUTES.minutes,
-                str(project_id), ON_DECK.isoformat(),
+                str(project_id), ON_HEAP.isoformat(),
             ),
         )
         connection.commit()
 
     before = Task(
-        id=task_id, title="Repair the fence", status=TaskStatus.ON_DECK,
-        created_at=CREATED, updated_at=ON_DECK, priority=Priority.P2,
+        id=task_id, title="Repair the fence", status=TaskStatus.ON_HEAP,
+        created_at=CREATED, updated_at=ON_HEAP, priority=Priority.P2,
         duration=Duration.THIRTY_MINUTES, project_id=project_id,
-        on_deck_since=ON_DECK,
+        on_heap_since=ON_HEAP,
     )
     with SQLiteTaskStore(database) as store:
         saved = store.get(task_id)

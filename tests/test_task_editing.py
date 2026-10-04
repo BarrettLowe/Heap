@@ -68,7 +68,7 @@ def test_clearing_priority_persists(
 
 
 @pytest.mark.parametrize("duration", [Duration.FIVE_MINUTES, Duration.FOUR_HOURS])
-def test_setting_and_changing_duration_persist_without_activating(
+def test_setting_and_changing_duration_persist_and_preserve_qualified_age(
     tmp_path: Path, monkeypatch: MonkeyPatch, captured_task: Task, duration: Duration
 ) -> None:
     """Duration edits save their timestamp without changing unrelated fields."""
@@ -84,7 +84,8 @@ def test_setting_and_changing_duration_persist_without_activating(
     assert edited.duration is duration
     assert edited.updated_at == EDITED
     assert edited.created_at == CREATED
-    assert edited.status is TaskStatus.INBOX
+    assert edited.status is TaskStatus.ON_HEAP
+    assert edited.on_heap_since == CREATED
     assert edited.title == captured_task.title
     assert edited.priority is Priority.P2
 
@@ -157,7 +158,8 @@ def test_title_edit_persists_and_preserves_other_fields(
     assert edited.created_at == CREATED
     assert edited.priority is Priority.P2
     assert edited.duration is Duration.THIRTY_MINUTES
-    assert edited.status is TaskStatus.INBOX
+    assert edited.status is TaskStatus.ON_HEAP
+    assert edited.on_heap_since == CREATED
     assert edited.project_id is None
 
 
@@ -182,13 +184,15 @@ def test_project_assignment_reassignment_and_removal_persist(
             assert assigned.title == captured_task.title
             assert assigned.priority is Priority.P2
             assert assigned.duration is Duration.THIRTY_MINUTES
-            assert assigned.status is TaskStatus.INBOX
+            assert assigned.status is TaskStatus.ON_HEAP
+            assert assigned.on_heap_since == CREATED
 
     with SQLiteProjectStore(database) as project_store:
         with SQLiteTaskStore(database) as store:
             tasks = TaskOperator(store, project_store)
             assert store.get(captured_task.id) == assigned
-            assert tasks.list_inbox() == [assigned]
+            assert tasks.list_inbox() == []
+            assert tasks.list_on_heap() == [assigned]
             reassigned_at = datetime(2026, 1, 4, 12, 0, tzinfo=UTC)
             monkeypatch.setattr(task_operator, "current_time", lambda: reassigned_at)
             moved = tasks.set_project(captured_task.id, second.id)

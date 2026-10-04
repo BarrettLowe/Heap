@@ -222,3 +222,23 @@ Frontend verified: coordinator independently ran analysis (no issues), 25 passin
 Integrated verification: Android emulator and Firefox web UI both captured into the same real SQLite inbox. Android app and browser page restarts reloaded saved tasks; exact task snapshots survived forced container recreation. Stopping the backend produced visible stale/unavailable warnings in both clients; refresh/retry recovered. A disconnected Android POST preserved its draft without queued retries. Browser fault injection dropped a response after a real save: the UI warned of an unknown outcome, kept the draft, and refresh revealed exactly 1 saved task without resubmitting. Physical-phone checks remain pending.
 
 Only check off implementation after its tests/reviews pass. Browser and phone checks remain pending unless actually performed. Do not implement the unfinished ranking, recurrence, or eligibility roadmap in this step.
+
+## 18. Inbox → editor → On-deck
+
+Barrett approved this batch. Plan/ownership: `docs/task-flow-plan.md`; API additions: `docs/api-contract.md`; Designer owns `docs/task-flow-design.md`. Coordinator now spawns independent Sol 6.1/high code reviewers; the earlier team ceiling is relaxed for temporary planning/review help.
+
+- [x] Revise/freeze the contract for qualification-based On-deck membership, manual external waiting, retained age, and atomic startup normalization.
+- [x] Designer: revise layouts to closely follow the reference, including authorized future-tab placeholders and responsive toolbar.
+- [ ] Backend: revise atomic organization and listing for automatic on-deck qualification.
+- [ ] Backend: align HTTP contract/validation and tests with the corrected policy.
+- [ ] Frontend: Inbox/On-deck navigation and reusable task editor.
+- [ ] Frontend: draft/conflict/uncertain-save handling and server-confirmed list transitions.
+- [ ] Run independent code review/fix cycles and regression checks.
+- [ ] Verify real Android/web atomic Save, automatic placement/restoration, waiting flag, age, recovery, and persistence.
+- [ ] Designer: review running narrow/keyboard-open Android and wide-web/error screenshots.
+
+Approved correction: qualification determines unfinished-task On-deck membership; there is 1 atomic Save and no move action. “Hidden” meant existing manual external waiting, not another feature; organized waiting tasks remain visible with a badge. Keep time-on-deck for possible future ranking. Normalize existing qualifying Inbox rows atomically at startup. Barrett lifted the pause and approved reference-led styling plus visible placeholder tabs without pages (Today/Projects/Settings). Coordinator read and accepted Designer's final amendment: Tasks / Today / Capture + / Projects / Settings, with Inbox/On-deck inside Tasks and Soon placeholders. Backend and Frontend received GO in non-overlapping paths. Prior explicit-move verification below is historical, not completion of this revision.
+
+Prior-policy backend verified: independent coordinator-spawned Sol 6.1/high review approved the source, ran 218 tests with 99% line coverage, and probed no-ops/repeated moves, competing stale PUTs, rollback/reopening, strict validation, and CORS errors. Coordinator rebuilt the Docker preview and verified real HTTP save+move, both list transitions, unchanged-save behavior, preserved age on edits, stale conflict, each/both nullable requirement clears, restoration staying Inbox, renewed age on explicit moves, and PUT CORS. Frontend/code-review/visual/integration completion remains pending.
+
+Stop after this task flow. The manual external-waiting checkbox and visible future-tab placeholders are approved; no project/Today/Settings pages, ranking, filters, completion/history, dependency editor, recurrence, or offline storage.

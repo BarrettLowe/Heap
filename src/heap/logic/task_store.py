@@ -13,6 +13,14 @@ class TaskStore(ABC):
         """Persist a new task or replace the saved state of an existing task."""
 
     @abstractmethod
+    def save_many(self, tasks: list[Task]) -> None:
+        """Save all snapshots in one transaction or roll back every write."""
+
+    @abstractmethod
+    def list_unfinished(self) -> list[Task]:
+        """Return unfinished snapshots for explicit organization normalization."""
+
+    @abstractmethod
     def get(self, task_id: UUID) -> Task | None:
         """Return a task snapshot, or None if the ID does not exist."""
 
@@ -59,4 +67,12 @@ class TaskStore(ABC):
 
     @abstractmethod
     def list_inbox(self) -> list[Task]:
-        """Return inbox snapshots ordered by creation time, then ID."""
+        """Return unfinished incomplete snapshots ordered by creation time, then ID."""
+
+    @abstractmethod
+    def list_on_heap(self) -> list[Task]:
+        """Return qualifying unfinished snapshots ordered by age, then ID."""
+
+    @abstractmethod
+    def list_for_project(self, project_id: UUID) -> list[Task]:
+        """Return all assigned task snapshots ordered by creation time, then ID."""

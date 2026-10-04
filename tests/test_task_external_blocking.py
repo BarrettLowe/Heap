@@ -37,7 +37,7 @@ def test_captured_task_defaults_to_not_externally_blocked(tmp_path: Path) -> Non
 
 
 @pytest.mark.parametrize(
-    "status", [TaskStatus.INBOX, TaskStatus.ON_DECK, TaskStatus.COMPLETED]
+    "status", [TaskStatus.INBOX, TaskStatus.ON_HEAP, TaskStatus.COMPLETED]
 )
 @pytest.mark.parametrize("externally_blocked", [False, True])
 def test_external_flag_edits_persist_and_preserve_other_fields(
@@ -54,9 +54,9 @@ def test_external_flag_edits_persist_and_preserve_other_fields(
             captured = tasks.capture("Repair the fence")
             tasks.set_project(captured.id, project.id)
             tasks.set_priority(captured.id, Priority.P2)
-            tasks.set_duration(captured.id, Duration.THIRTY_MINUTES)
             if status is not TaskStatus.INBOX:
-                tasks.move_to_on_deck(captured.id)
+                tasks.set_duration(captured.id, Duration.THIRTY_MINUTES)
+                tasks.move_to_heap(captured.id)
             if status is TaskStatus.COMPLETED:
                 tasks.complete(captured.id)
             before = tasks.set_externally_blocked(captured.id, not externally_blocked)
@@ -127,7 +127,7 @@ def test_external_flag_is_not_changed_by_dependency_or_lifecycle_operations(
         tasks.delete(prerequisite.id)
         tasks.set_priority(dependent.id, Priority.P2)
         tasks.set_duration(dependent.id, Duration.THIRTY_MINUTES)
-        moved = tasks.move_to_on_deck(dependent.id)
+        moved = tasks.move_to_heap(dependent.id)
         assert moved.externally_blocked is True
         completed = tasks.complete(dependent.id)
         assert completed.externally_blocked is True

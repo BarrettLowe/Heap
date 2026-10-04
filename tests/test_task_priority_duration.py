@@ -68,7 +68,7 @@ def test_capture_leaves_priority_unset_and_duration_unknown(tmp_path: Path) -> N
 def test_priority_and_duration_survive_database_reopen(
     tmp_path: Path, priority: Priority, duration: Duration
 ) -> None:
-    """Explicitly saved priority and duration appear in retrieval and inbox lists."""
+    """Saved enum values survive reopening and determine list qualification."""
     database = tmp_path / "heap.sqlite"
     with SQLiteTaskStore(database) as store:
         task = TaskOperator(store).capture("Repair the fence")
@@ -78,7 +78,13 @@ def test_priority_and_duration_survive_database_reopen(
 
     with SQLiteTaskStore(database) as store:
         assert store.get(task.id) == task
-        assert TaskOperator(store).list_inbox() == [task]
+        tasks = TaskOperator(store)
+        if duration is Duration.UNKNOWN:
+            assert tasks.list_inbox() == [task]
+            assert tasks.list_on_heap() == []
+        else:
+            assert tasks.list_inbox() == []
+            assert tasks.list_on_heap() == [task]
 
 
 def test_older_database_keeps_tasks_with_unset_priority_and_unknown_duration(
@@ -115,7 +121,7 @@ def test_older_database_keeps_tasks_with_unset_priority_and_unknown_duration(
         assert task.priority is None
         assert task.duration is Duration.UNKNOWN
         assert task.project_id is None
-        assert task.on_deck_since is None
+        assert task.on_heap_since is None
         task.priority = Priority.P2
         task.duration = Duration.THIRTY_MINUTES
         store.save(task)

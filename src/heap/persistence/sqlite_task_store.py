@@ -75,8 +75,14 @@ class SQLiteTaskStore(TaskStore):
 
     def save(self, task: Task) -> None:
         """Write the task snapshot and commit it before returning."""
+        self.save_many([task])
+
+    def save_many(self, tasks: list[Task]) -> None:
+        """Save snapshots atomically, retaining the historical stored status name."""
+        if not tasks:
+            return
         with self._connection:
-            self._connection.execute(
+            self._connection.executemany(
                 """
                 INSERT INTO tasks
                     (id, title, status, created_at, updated_at,
@@ -95,19 +101,24 @@ class SQLiteTaskStore(TaskStore):
                     completed_at = excluded.completed_at,
                     externally_blocked = excluded.externally_blocked
                 """,
-                (
-                    str(task.id),
-                    task.title,
-                    task.status.value,
-                    task.created_at.isoformat(),
-                    task.updated_at.isoformat(),
-                    task.priority.value if task.priority is not None else None,
-                    task.duration.minutes,
-                    str(task.project_id) if task.project_id is not None else None,
-                    task.on_deck_since.isoformat() if task.on_deck_since else None,
-                    task.completed_at.isoformat() if task.completed_at else None,
-                    task.externally_blocked,
-                ),
+                [
+                    (
+                        str(task.id),
+                        task.title,
+                        "on_deck"
+                        if task.status is TaskStatus.ON_HEAP
+                        else task.status.value,
+                        task.created_at.isoformat(),
+                        task.updated_at.isoformat(),
+                        task.priority.value if task.priority is not None else None,
+                        task.duration.minutes,
+                        str(task.project_id) if task.project_id is not None else None,
+                        task.on_heap_since.isoformat() if task.on_heap_since else None,
+                        task.completed_at.isoformat() if task.completed_at else None,
+                        task.externally_blocked,
+                    )
+                    for task in tasks
+                ],
             )
 
     def delete(self, task_id: UUID) -> None:
@@ -212,39 +223,89 @@ class SQLiteTaskStore(TaskStore):
             return None
         return self._task_from_row(row)
 
+    def list_unfinished(self) -> list[Task]:
+        """Load unfinished snapshots for explicit Python-side normalization."""
+        rows = self._connection.execute(
+            """
+            SELECT id, title, status, created_at, updated_at,
+                   priority, duration_minutes, project_id, on_deck_since, completed_at,
+                   externally_blocked
+            FROM tasks WHERE status != ? ORDER BY id
+            """,
+            (TaskStatus.COMPLETED.value,),
+        ).fetchall()
+        return [self._task_from_row(row) for row in rows]
+
     def list_inbox(self) -> list[Task]:
-        """Load inbox snapshots ordered by creation time, then ID."""
+        """Load unfinished incomplete snapshots ordered by creation time, then ID."""
         rows = self._connection.execute(
             """
             SELECT id, title, status, created_at, updated_at,
                    priority, duration_minutes, project_id, on_deck_since, completed_at,
                    externally_blocked
             FROM tasks
-            WHERE status = ?
+            WHERE status != ? AND (priority IS NULL OR duration_minutes IS NULL)
             ORDER BY created_at, id
             """,
-            (TaskStatus.INBOX.value,),
+            (TaskStatus.COMPLETED.value,),
+        ).fetchall()
+        return [self._task_from_row(row) for row in rows]
+
+    def list_on_heap(self) -> list[Task]:
+        """Load qualifying unfinished snapshots ordered by age, then ID."""
+        rows = self._connection.execute(
+            """
+            SELECT id, title, status, created_at, updated_at,
+                   priority, duration_minutes, project_id, on_deck_since, completed_at,
+                   externally_blocked
+            FROM tasks
+            WHERE status != ? AND priority IS NOT NULL AND duration_minutes IS NOT NULL
+            ORDER BY on_deck_since, id
+            """,
+            (TaskStatus.COMPLETED.value,),
+        ).fetchall()
+        return [self._task_from_row(row) for row in rows]
+
+    def list_for_project(self, project_id: UUID) -> list[Task]:
+        """Load every task assigned to a project, including completed tasks."""
+        rows = self._connection.execute(
+            """
+            SELECT id, title, status, created_at, updated_at,
+                   priority, duration_minutes, project_id, on_deck_since, completed_at,
+                   externally_blocked
+            FROM tasks WHERE project_id = ? ORDER BY created_at, id
+            """,
+            (str(project_id),),
         ).fetchall()
         return [self._task_from_row(row) for row in rows]
 
     @staticmethod
     def _task_from_row(
         row: tuple[
-            str, str, str, str, str, int | None, int | None,
-            str | None, str | None, str | None, int,
+            str,
+            str,
+            str,
+            str,
+            str,
+            int | None,
+            int | None,
+            str | None,
+            str | None,
+            str | None,
+            int,
         ],
     ) -> Task:
-        """Convert a stored row into an independent task snapshot."""
+        """Load a snapshot, translating the historical status into heap vocabulary."""
         return Task(
             id=UUID(row[0]),
             title=row[1],
-            status=TaskStatus(row[2]),
+            status=TaskStatus.ON_HEAP if row[2] == "on_deck" else TaskStatus(row[2]),
             created_at=datetime.fromisoformat(row[3]),
             updated_at=datetime.fromisoformat(row[4]),
             priority=Priority(row[5]) if row[5] is not None else None,
             duration=Duration(row[6]),
             project_id=UUID(row[7]) if row[7] is not None else None,
-            on_deck_since=datetime.fromisoformat(row[8]) if row[8] else None,
+            on_heap_since=datetime.fromisoformat(row[8]) if row[8] else None,
             completed_at=datetime.fromisoformat(row[9]) if row[9] else None,
             externally_blocked=bool(row[10]),
         )

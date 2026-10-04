@@ -14,3 +14,11 @@ class ProjectStore(ABC):
     @abstractmethod
     def get(self, project_id: UUID) -> Project | None:
         """Return a project snapshot, or None if the ID does not exist."""
+
+    @abstractmethod
+    def list_all(self) -> list[Project]:
+        """Return projects ordered by case-insensitive name, then ID."""
+
+    @abstractmethod
+    def delete(self, project_id: UUID) -> None:
+        """Delete a project and all its assigned tasks atomically; missing IDs raise KeyError."""

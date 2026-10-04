@@ -40,23 +40,23 @@ def saved_graph(
             snapshots = {
                 name: tasks.capture(name)
                 for name in (
-                    "inbox", "on_deck", "completed",
+                    "inbox", "on_heap", "completed",
                     "dependent", "prerequisite", "unrelated",
                 )
             }
             tasks.set_project(snapshots["inbox"].id, related.id)
             tasks.set_project(snapshots["dependent"].id, related.id)
             tasks.set_project(snapshots["unrelated"].id, unrelated.id)
-            on_deck_id = snapshots["on_deck"].id
-            tasks.set_priority(on_deck_id, Priority.P2)
-            tasks.set_duration(on_deck_id, Duration.THIRTY_MINUTES)
-            tasks.move_to_on_deck(on_deck_id)
+            on_heap_id = snapshots["on_heap"].id
+            tasks.set_priority(on_heap_id, Priority.P2)
+            tasks.set_duration(on_heap_id, Duration.THIRTY_MINUTES)
+            tasks.move_to_heap(on_heap_id)
             tasks.complete(snapshots["completed"].id)
             monkeypatch.setattr(task_operator, "current_time", lambda: LINKED)
             for dependent, prerequisite in (
                 ("inbox", "prerequisite"),
-                ("on_deck", "inbox"),
-                ("completed", "on_deck"),
+                ("on_heap", "inbox"),
+                ("completed", "on_heap"),
                 ("dependent", "completed"),
                 ("dependent", "prerequisite"),
                 ("unrelated", "prerequisite"),
@@ -76,8 +76,8 @@ def assert_graph_unchanged(
     """Reopen storage and verify every task, dependency, and project survived."""
     expected_links = {
         "inbox": [snapshots["prerequisite"].id],
-        "on_deck": [snapshots["inbox"].id],
-        "completed": [snapshots["on_deck"].id],
+        "on_heap": [snapshots["inbox"].id],
+        "completed": [snapshots["on_heap"].id],
         "dependent": sorted([
             snapshots["completed"].id, snapshots["prerequisite"].id,
         ]),
@@ -99,9 +99,9 @@ def test_batch_deletion_cleans_links_and_preserves_survivors_after_reopening(
 ) -> None:
     """Deleting mixed states removes touching edges, not unrelated data."""
     snapshots, projects = saved_graph
-    targets = [snapshots[name] for name in ("inbox", "on_deck", "completed")]
+    targets = [snapshots[name] for name in ("inbox", "on_heap", "completed")]
     assert [target.status for target in targets] == [
-        TaskStatus.INBOX, TaskStatus.ON_DECK, TaskStatus.COMPLETED,
+        TaskStatus.INBOX, TaskStatus.ON_HEAP, TaskStatus.COMPLETED,
     ]
     database = tmp_path / "heap.sqlite"
     with SQLiteTaskStore(database) as store:
@@ -136,9 +136,9 @@ def test_single_deletion_cleans_incoming_and_outgoing_links_after_reopening(
         for name, snapshot in snapshots.items():
             if name != "inbox":
                 assert store.get(snapshot.id) == snapshot
-        assert tasks.list_dependencies(snapshots["on_deck"].id) == []
+        assert tasks.list_dependencies(snapshots["on_heap"].id) == []
         assert tasks.list_dependencies(snapshots["prerequisite"].id) == []
-        assert tasks.list_dependencies(snapshots["completed"].id) == [snapshots["on_deck"].id]
+        assert tasks.list_dependencies(snapshots["completed"].id) == [snapshots["on_heap"].id]
         assert tasks.list_dependencies(snapshots["dependent"].id) == sorted([
             snapshots["completed"].id, snapshots["prerequisite"].id,
         ])
@@ -233,7 +233,7 @@ def test_duplicate_ids_are_deleted_once_without_rejecting_the_batch(
         tasks = TaskOperator(store)
         assert store.get(inbox_id) is None
         assert store.get(completed_id) is None
-        for name in ("on_deck", "dependent", "prerequisite", "unrelated"):
+        for name in ("on_heap", "dependent", "prerequisite", "unrelated"):
             assert store.get(snapshots[name].id) == snapshots[name]
-        assert tasks.list_dependencies(snapshots["on_deck"].id) == []
+        assert tasks.list_dependencies(snapshots["on_heap"].id) == []
         assert tasks.list_dependencies(snapshots["dependent"].id) == [snapshots["prerequisite"].id]

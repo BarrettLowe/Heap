@@ -3,92 +3,27 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'inbox_task.dart';
+import 'task_detail.dart';
+
+export 'inbox_task.dart';
+
 const Duration requestTimeout = Duration(seconds: 10);
 
-class InboxTask {
-  static final RegExp _uuidPattern = RegExp(
-    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
-  );
-  static final RegExp _timestampPattern = RegExp(
-    r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$',
-  );
-
-  const InboxTask({
-    required this.id,
-    required this.title,
-    required this.status,
-    required this.createdAt,
-    required this.updatedAt,
-  });
-
-  final String id;
-  final String title;
-  final String status;
-  final DateTime createdAt;
-  final DateTime updatedAt;
-
-  factory InboxTask.fromJson(Object? value) {
-    if (value is! Map<String, dynamic>) {
-      throw const FormatException('Task must be an object.');
-    }
-    const fields = <String>{
-      'id',
-      'title',
-      'status',
-      'created_at',
-      'updated_at',
-    };
-    if (!value.keys.toSet().containsAll(fields)) {
-      throw const FormatException('Task is missing required fields.');
-    }
-    final id = value['id'];
-    final title = value['title'];
-    final status = value['status'];
-    final createdAt = value['created_at'];
-    final updatedAt = value['updated_at'];
-    if (id is! String ||
-        title is! String ||
-        status is! String ||
-        createdAt is! String ||
-        updatedAt is! String) {
-      throw const FormatException('Task fields have invalid types.');
-    }
-    if (!_uuidPattern.hasMatch(id) ||
-        title.trim().isEmpty ||
-        status != 'inbox' ||
-        !_timestampPattern.hasMatch(createdAt) ||
-        !_timestampPattern.hasMatch(updatedAt)) {
-      throw const FormatException('Task fields have invalid values.');
-    }
-    final createdDate = DateTime.parse(createdAt);
-    final updatedDate = DateTime.parse(updatedAt);
-    if (_utcTimestamp(createdDate) != createdAt ||
-        _utcTimestamp(updatedDate) != updatedAt) {
-      throw const FormatException('Task timestamps are not valid UTC dates.');
-    }
-    return InboxTask(
-      id: id,
-      title: title,
-      status: status,
-      createdAt: createdDate,
-      updatedAt: updatedDate,
-    );
-  }
-
-  static String _utcTimestamp(DateTime date) {
-    final iso = date.toIso8601String();
-    // Dart omits the final 3 fractional digits when microseconds are zero.
-    return date.microsecond == 0
-        ? '${iso.substring(0, iso.length - 1)}000Z'
-        : iso;
-  }
-}
-
 class HeapApiException implements Exception {
-  const HeapApiException(this.message, {this.unknownOutcome = false});
+  const HeapApiException(
+    this.message, {
+    this.unknownOutcome = false,
+    this.statusCode,
+    this.code,
+    this.fieldErrors = const {},
+  });
 
   final String message;
   final bool unknownOutcome;
+  final int? statusCode;
+  final String? code;
+  final Map<String, String> fieldErrors;
 
   @override
   String toString() => message;
@@ -99,7 +34,13 @@ abstract interface class InboxService {
   Future<InboxTask> capture(String title);
 }
 
-class HeapApi implements InboxService {
+abstract interface class OrganizationService {
+  Future<TaskDetail> getTask(String id);
+  Future<List<TaskDetail>> listOnHeap();
+  Future<TaskDetail> saveOrganization(OrganizationSubmission submission);
+}
+
+class HeapApi implements InboxService, OrganizationService {
   HeapApi({
     required this.client,
     required this.baseUri,
@@ -125,9 +66,11 @@ class HeapApi implements InboxService {
       if (body is! Map<String, dynamic> || body['items'] is! List) {
         throw const FormatException('Invalid inbox response.');
       }
-      return List<InboxTask>.unmodifiable(
-        (body['items'] as List).map(InboxTask.fromJson),
-      );
+      final tasks = (body['items'] as List).map(InboxTask.fromJson).toList();
+      if (tasks.map((task) => task.id).toSet().length != tasks.length) {
+        throw const FormatException('Duplicate inbox IDs.');
+      }
+      return List<InboxTask>.unmodifiable(tasks);
     } on HeapApiException {
       rethrow;
     } on TimeoutException {
@@ -150,7 +93,7 @@ class HeapApi implements InboxService {
           )
           .timeout(timeout);
       if (response.statusCode != 201) {
-        if (response.statusCode >= 500) {
+        if (response.statusCode >= 500 || response.statusCode < 400) {
           throw const HeapApiException(
             'Capture may have succeeded. Refresh the inbox before submitting again.',
             unknownOutcome: true,
@@ -159,7 +102,7 @@ class HeapApi implements InboxService {
         throw HeapApiException(_messageFor(response.statusCode));
       }
       try {
-        return InboxTask.fromJson(jsonDecode(response.body));
+        return InboxTask.fromCaptureJson(jsonDecode(response.body));
       } on FormatException {
         throw const HeapApiException(
           'Capture may have succeeded. Refresh the inbox before submitting again.',
@@ -179,6 +122,120 @@ class HeapApi implements InboxService {
         unknownOutcome: true,
       );
     }
+  }
+
+  @override
+  Future<TaskDetail> getTask(String id) async {
+    final response = await _organizationRead('/api/v1/tasks/$id');
+    try {
+      final detail = TaskDetail.fromJson(jsonDecode(response.body));
+      if (detail.id != id) throw const FormatException('Wrong task ID.');
+      return detail;
+    } on FormatException {
+      throw const HeapApiException('The server returned an invalid response.');
+    }
+  }
+
+  @override
+  Future<List<TaskDetail>> listOnHeap() async {
+    final response = await _organizationRead('/api/v1/heap');
+    try {
+      final body = jsonDecode(response.body);
+      if (body is! Map<String, dynamic> || body['items'] is! List) {
+        throw const FormatException('Invalid on-the-heap list.');
+      }
+      final tasks = (body['items'] as List).map(TaskDetail.fromJson).toList();
+      if (tasks.any((task) => task.status != 'on_heap') ||
+          tasks.map((task) => task.id).toSet().length != tasks.length) {
+        throw const FormatException('Invalid on-the-heap items.');
+      }
+      return List.unmodifiable(tasks);
+    } on FormatException {
+      throw const HeapApiException('The server returned an invalid response.');
+    }
+  }
+
+  Future<http.Response> _organizationRead(String path) async {
+    try {
+      final response = await client.get(baseUri.resolve(path)).timeout(timeout);
+      if (response.statusCode != 200) throw _organizationError(response);
+      return response;
+    } on HeapApiException {
+      rethrow;
+    } on TimeoutException {
+      throw const HeapApiException('The server took too long to respond.');
+    } catch (_) {
+      throw const HeapApiException('Could not reach the server.');
+    }
+  }
+
+  @override
+  Future<TaskDetail> saveOrganization(OrganizationSubmission submission) async {
+    try {
+      final response = await client
+          .put(
+            baseUri.resolve(
+              '/api/v1/tasks/${submission.original.id}/organization',
+            ),
+            headers: const {'content-type': 'application/json'},
+            body: jsonEncode(submission.toJson()),
+          )
+          .timeout(timeout);
+      if (response.statusCode >= 500 ||
+          (response.statusCode < 400 && response.statusCode != 200)) {
+        throw _unknownSave;
+      }
+      if (response.statusCode != 200) throw _organizationError(response);
+      final detail = TaskDetail.fromJson(jsonDecode(response.body));
+      if (detail.id != submission.original.id || detail.status == 'completed') {
+        throw const FormatException('Invalid saved task.');
+      }
+      return detail;
+    } on HeapApiException {
+      rethrow;
+    } catch (_) {
+      throw _unknownSave;
+    }
+  }
+
+  static const _unknownSave = HeapApiException(
+    'The save may have succeeded. Your draft has been kept. Reload the saved task before trying again.',
+    unknownOutcome: true,
+  );
+
+  HeapApiException _organizationError(http.Response response) {
+    String? code;
+    final fields = <String, String>{};
+    try {
+      final body = jsonDecode(response.body);
+      if (body is Map<String, dynamic> &&
+          body['error'] is Map<String, dynamic>) {
+        final error = body['error'] as Map<String, dynamic>;
+        if (error['code'] is String) code = error['code'] as String;
+        if (error['fields'] is List) {
+          for (final field in error['fields'] as List) {
+            if (field is Map<String, dynamic> &&
+                {
+                  'title',
+                  'priority',
+                  'duration_minutes',
+                  'externally_blocked',
+                }.contains(field['field']) &&
+                field['message'] is String) {
+              fields[field['field'] as String] = field['message'] as String;
+            }
+          }
+        }
+      }
+    } on FormatException {
+      // HTTP rejection still preserves the draft when the error body is invalid.
+    }
+    return HeapApiException(
+      _messageFor(response.statusCode),
+      statusCode: response.statusCode,
+      code: code,
+      fieldErrors: Map.unmodifiable(fields),
+    );
   }
 
   String _messageFor(int statusCode) => switch (statusCode) {

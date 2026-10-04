@@ -1,22 +1,10 @@
 # Heap project guidance
 
-- Build this together with Barrett, one agreed step at a time. Do not autonomously implement the roadmap.
-- The UI uses Flutter/Material 3 and targets Android first, while keeping web viable. Use both a physical phone and an emulator; the emulator should support agent-assisted inspection and testing. Barrett has deferred Dart lessons and wants agents to build the UI for later review/tweaking.
-- The supplied visual reference guides dark-green/warm-background styling, not new behavior. The app is server-backed first, with unavailable/retry states rather than offline cache, sync, or queued edits.
-- Heap runs server-side through VPN/Tailscale. Use Docker/Compose for the Python backend and retain SQLite in a persistent volume. Hosted cloud versus self-hosting remains undecided; local SQLite is not a workstation-only deployment decision.
-- For delegated implementation, plan first, give Frontend/Backend non-overlapping writable paths, and keep shared documents coordinator-owned. Each implementation agent must obtain its own `openai/gpt-6.1-sol` high-reasoning review, fix findings iteratively, verify, and report back. Barrett limits the delegated team to 3 agents; schedule planning/review subagents so they stay within that limit.
-- Track progress in `TASKS.md`; check off work only after verification. The original requirements are in `personal_task_project_manager_v1_spec.md`.
-- Resolve design questions as they arise. Keep changes small and test business behavior.
-- Update this file as we establish architecture and working conventions. Keep it minimal.
-- Use `logic/`, `persistence/`, and eventually an interface layer. Name files for their contents (for example, `task.py`, `task_operator.py`, `task_store.py`). Avoid “models”; reserve “service” for background services.
-- Task dataclasses are in-memory snapshots, not database-connected objects. Field changes do not automatically persist.
-- Use “on-deck” for organized tasks (`ON_DECK`, `move_to_on_deck`, `on_deck_since`). Priority and known duration are required to move on-deck; projects are optional. On-deck does not imply unblocked or started. Clearing priority or duration returns an on-deck task to the inbox and clears its on-deck timestamp; restoring the value does not automatically move it on-deck.
-- Use uv and pytest; run tests with `uv run pytest`.
-- Production operations read current UTC time once. Tests replace the time source; do not require callers to pass timestamps or inject a clock.
-- Use an injected Strategy object for ranking scores and their explanation contributions. It receives data and explicit time, with no database access. Keep eligibility and diversification outside the scoring strategy.
-- Route writes through application operations that apply business rules and explicitly save before reporting success. Save related changes in one transaction; test persistence by reloading from storage.
-- When you discover something about this project that should be stored in durable memory, save it to AGENTS.md in the project root. Only save things that cannot be easily inferred from the code.
-- Store task dependencies in a separate table. Deleting a task removes every dependency link involving it, whether it is the dependent task or a prerequisite; removing a prerequisite may unblock remaining tasks. Batch deletion is all-or-nothing, including link cleanup, if any ID is missing or any deletion fails. Empty batches do nothing; repeated IDs count once.
-- Explicit dependency edits update only the dependent task's `updated_at`; unchanged links do not write or read time. Cycle validation currently requires non-overlapping dependency edits.
-- External blocking is limited to a fully manual `externally_blocked` boolean, with no ranking influence, reason text, or automatic updates.
-- Multi-task views should use bulk dependency checks, not call the single-task check in a loop. Dependency checks report prerequisite state, separate from task eligibility.
+- Build this together with Barrett, one agreed step at a time; do not autonomously implement the roadmap.
+- The UI is Flutter/Material 3, Android-first, with web support kept viable. Test on both a physical phone and an emulator.
+- Treat Barrett's supplied UI image as the primary visual target. Keep behavior grounded in the requirements; don't invent task metadata or fake navigation.
+- Heap runs on a server reached through VPN/Tailscale. Use Docker Compose and keep SQLite in its persistent volume. The API has no authentication, so keep it on a trusted private network; run only one writer against its SQLite database. Hosted cloud versus self-hosting remains undecided. See `docs/backend.md` for deployment details.
+- For UI work, use Designer for design/review, Frontend for Flutter, and Backend for API changes. Plan first, keep implementation paths separate, and have the coordinator own shared documents and coordinate independent code review.
+- Track progress in `TASKS.md`; requirements are in `personal_task_project_manager_v1_spec.md`. Check off work only after verification.
+- This is a personal project: prefer the simplest change that delivers the agreed behavior. Existing development databases are disposable; no legacy compatibility work is needed.
+- Deleting a project permanently deletes every task assigned to it.

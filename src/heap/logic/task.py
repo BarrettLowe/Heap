@@ -11,7 +11,7 @@ class TaskStatus(StrEnum):
     """The lifecycle states supported so far."""
 
     INBOX = "inbox"
-    ON_DECK = "on_deck"
+    ON_HEAP = "on_heap"
     COMPLETED = "completed"
 
 
@@ -27,6 +27,6 @@ class Task:
     priority: Priority | None = None
     duration: Duration = Duration.UNKNOWN
     project_id: UUID | None = None
-    on_deck_since: datetime | None = None
+    on_heap_since: datetime | None = None
     completed_at: datetime | None = None
     externally_blocked: bool = False

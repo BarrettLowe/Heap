@@ -31,22 +31,22 @@ def sql_statements(monkeypatch: MonkeyPatch) -> list[str]:
 
 
 @pytest.mark.parametrize(
-    "prerequisite_status", [TaskStatus.INBOX, TaskStatus.ON_DECK, TaskStatus.COMPLETED]
+    "prerequisite_status", [TaskStatus.INBOX, TaskStatus.ON_HEAP, TaskStatus.COMPLETED]
 )
 def test_single_task_blocking_uses_current_prerequisite_status_after_reopening(
     tmp_path: Path, prerequisite_status: TaskStatus
 ) -> None:
-    """Inbox and on-deck prerequisites block; completed prerequisites do not."""
+    """Inbox and heap prerequisites block; completed prerequisites do not."""
     database = tmp_path / "heap.sqlite"
     with SQLiteTaskStore(database) as store:
         tasks = TaskOperator(store)
         dependent = tasks.capture("Paint wall")
         prerequisite = tasks.capture("Repair drywall")
         tasks.add_dependency(dependent.id, prerequisite.id)
-        if prerequisite_status is TaskStatus.ON_DECK:
+        if prerequisite_status is TaskStatus.ON_HEAP:
             tasks.set_priority(prerequisite.id, Priority.P2)
             tasks.set_duration(prerequisite.id, Duration.THIRTY_MINUTES)
-            tasks.move_to_on_deck(prerequisite.id)
+            tasks.move_to_heap(prerequisite.id)
         elif prerequisite_status is TaskStatus.COMPLETED:
             tasks.complete(prerequisite.id)
 

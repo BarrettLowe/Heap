@@ -79,6 +79,51 @@ class SQLiteProjectStore(ProjectStore):
             completed_at=datetime.fromisoformat(row[6]) if row[6] else None,
         )
 
+    def list_all(self) -> list[Project]:
+        """Load every project ordered by case-insensitive name, then ID."""
+        rows = self._connection.execute(
+            """
+            SELECT id, name, description, status, created_at, updated_at, completed_at
+            FROM projects ORDER BY name COLLATE NOCASE, name, id
+            """
+        ).fetchall()
+        return [self._project_from_row(row) for row in rows]
+
+    def delete(self, project_id: UUID) -> None:
+        """Delete a project, its tasks, and their dependency links atomically."""
+        with self._connection:
+            cursor = self._connection.execute(
+                "DELETE FROM projects WHERE id = ?", (str(project_id),)
+            )
+            if cursor.rowcount == 0:
+                raise KeyError(project_id)
+            self._connection.execute(
+                """
+                DELETE FROM task_dependencies
+                WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)
+                   OR prerequisite_id IN (SELECT id FROM tasks WHERE project_id = ?)
+                """,
+                (str(project_id), str(project_id)),
+            )
+            self._connection.execute(
+                "DELETE FROM tasks WHERE project_id = ?", (str(project_id),)
+            )
+
+    @staticmethod
+    def _project_from_row(
+        row: tuple[str, str, str | None, str, str, str, str | None],
+    ) -> Project:
+        """Convert a stored row into an independent project snapshot."""
+        return Project(
+            id=UUID(row[0]),
+            name=row[1],
+            description=row[2],
+            status=ProjectStatus(row[3]),
+            created_at=datetime.fromisoformat(row[4]),
+            updated_at=datetime.fromisoformat(row[5]),
+            completed_at=datetime.fromisoformat(row[6]) if row[6] else None,
+        )
+
     def close(self) -> None:
         """Close the database connection."""
         self._connection.close()

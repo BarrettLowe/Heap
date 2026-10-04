@@ -1,0 +1,379 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:heap_app/heap_api.dart';
+import 'package:heap_app/task_detail.dart';
+import 'package:heap_app/task_editor_page.dart';
+
+import 'task_flow_fakes.dart';
+
+Future<void> openEditor(
+  WidgetTester tester,
+  FakeOrganization org, {
+  VoidCallback? onLeave,
+  double scale = 1,
+}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(textScaler: TextScaler.linear(scale)),
+        child: child!,
+      ),
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: TextButton(
+            onPressed: () => Navigator.of(context).push<TaskDetail>(
+              MaterialPageRoute(
+                builder: (_) => TaskEditorPage(
+                  id: taskId,
+                  service: org,
+                  sourceOnHeap: false,
+                  onUncertainLeave: onLeave ?? () {},
+                ),
+              ),
+            ),
+            child: const Text('Open editor'),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.tap(find.text('Open editor'));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
+}
+
+Future<void> revealTap(WidgetTester tester, Finder target) async {
+  await tester.ensureVisible(target);
+  await tester.pumpAndSettle();
+  await tester.tap(target);
+  await tester.pumpAndSettle();
+}
+
+void main() {
+  testWidgets('disposed editor ignores pending detail completion', (
+    tester,
+  ) async {
+    final pending = Completer<TaskDetail>();
+    final org = FakeOrganization()..onGet = (_) => pending.future;
+    await openEditor(tester, org);
+    expect(find.text('Loading task…'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('editor-back')));
+    await tester.pumpAndSettle();
+    pending.complete(detail());
+    await tester.pumpAndSettle();
+    expect(find.text('Open editor'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+    'wide editor caps fields and exposes selectable nullable options',
+    (tester) async {
+      tester.view.physicalSize = const Size(1280, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final org = FakeOrganization()
+        ..onGet = (_) async => detail(priority: 2, duration: 30);
+      await openEditor(tester, org);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byKey(const Key('editor-title'))).width, 592);
+      await revealTap(tester, find.byKey(const Key('editor-duration')));
+      await tester.tap(find.text('Unknown').last);
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Saving will return this task to the inbox.'),
+        findsOneWidget,
+      );
+      await revealTap(tester, find.byKey(const Key('editor-save')));
+      expect(org.lastSubmission!.draft.durationMinutes, isNull);
+    },
+  );
+  testWidgets(
+    'fresh unavailable detail never edits list data; retry loads real fields',
+    (tester) async {
+      final org = FakeOrganization()
+        ..onGet = (_) => throw const HeapApiException('Offline');
+      await openEditor(tester, org);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('editor-title')), findsNothing);
+      org.onGet = (_) async => detail(title: 'Fresh server title');
+      await revealTap(tester, find.byKey(const Key('detail-retry')));
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const Key('editor-title')))
+            .controller!
+            .text,
+        'Fresh server title',
+      );
+      expect(
+        tester
+            .widget<TextField>(
+              find.descendant(
+                of: find.byKey(const Key('editor-title')),
+                matching: find.byType(TextField),
+              ),
+            )
+            .focusNode!
+            .hasFocus,
+        false,
+      );
+    },
+  );
+  testWidgets(
+    'one unchanged valid Save enabled; missing requirements still save; blank title disabled',
+    (tester) async {
+      final org = FakeOrganization();
+      await openEditor(tester, org);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('editor-save')))
+            .onPressed,
+        isNotNull,
+      );
+      expect(
+        find.text(
+          'Choose a priority and duration to qualify for the heap. You can save without them.',
+        ),
+        findsOneWidget,
+      );
+      await tester.enterText(find.byKey(const Key('editor-title')), '   ');
+      await tester.pumpAndSettle();
+      expect(find.text('Enter a task title.'), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('editor-save')))
+            .onPressed,
+        isNull,
+      );
+    },
+  );
+  testWidgets(
+    'dirty system back defaults to keep edits; discard never writes',
+    (tester) async {
+      final org = FakeOrganization();
+      await openEditor(tester, org);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('editor-title')), 'My edits');
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('Discard changes?'), findsOneWidget);
+      await tester.tap(find.text('Keep editing'));
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const Key('editor-title')))
+            .controller!
+            .text,
+        'My edits',
+      );
+      await tester.tap(find.byKey(const Key('editor-back')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Discard changes'));
+      await tester.pumpAndSettle();
+      expect(find.text('Open editor'), findsOneWidget);
+      expect(org.puts, 0);
+    },
+  );
+  testWidgets(
+    'saving blocks visible and system back, fields, waiting and repeated PUT',
+    (tester) async {
+      final org = FakeOrganization();
+      final pending = Completer<TaskDetail>();
+      org.onSave = (_) => pending.future;
+      await openEditor(tester, org);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editor-save')));
+      await tester.pump();
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const Key('editor-title')))
+            .enabled,
+        false,
+      );
+      expect(
+        tester
+            .widget<CheckboxListTile>(find.byKey(const Key('editor-awaiting')))
+            .onChanged,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<IconButton>(find.byKey(const Key('editor-back')))
+            .onPressed,
+        isNull,
+      );
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      expect(find.text('Edit task'), findsOneWidget);
+      expect(org.puts, 1);
+      pending.complete(detail());
+      await tester.pumpAndSettle();
+      expect(find.text('Open editor'), findsOneWidget);
+    },
+  );
+  testWidgets(
+    'conflict and uncertain differing choices retain title and waiting',
+    (tester) async {
+      for (final uncertain in [false, true]) {
+        final org = FakeOrganization()
+          ..onSave = (_) => throw HeapApiException(
+            'Rejected',
+            unknownOutcome: uncertain,
+            statusCode: uncertain ? null : 409,
+            code: uncertain ? null : 'task_conflict',
+          );
+        await openEditor(tester, org);
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('editor-title')),
+          'My edits',
+        );
+        await revealTap(tester, find.byKey(const Key('editor-awaiting')));
+        await revealTap(tester, find.byKey(const Key('editor-save')));
+        expect(
+          tester
+              .widget<TextFormField>(find.byKey(const Key('editor-title')))
+              .enabled,
+          false,
+        );
+        org.onGet = (_) async => detail(title: 'Remote title');
+        await revealTap(tester, find.byKey(const Key('reload-saved-task')));
+        expect(find.text('Task title: Remote title'), findsOneWidget);
+        expect(
+          find.text('Awaiting external dependencies: Yes'),
+          findsOneWidget,
+        );
+        await revealTap(tester, find.byKey(const Key('keep-my-edits')));
+        expect(
+          tester
+              .widget<TextFormField>(find.byKey(const Key('editor-title')))
+              .controller!
+              .text,
+          'My edits',
+        );
+        expect(
+          tester
+              .widget<CheckboxListTile>(
+                find.byKey(const Key('editor-awaiting')),
+              )
+              .value,
+          true,
+        );
+        expect(org.puts, 1);
+        expect(
+          tester
+              .widget<FilledButton>(find.byKey(const Key('editor-save')))
+              .onPressed,
+          isNotNull,
+        );
+        await tester.pumpWidget(const SizedBox());
+      }
+    },
+  );
+  testWidgets(
+    'matching unknown save offers status-aware return without second PUT',
+    (tester) async {
+      final org = FakeOrganization()
+        ..onSave = (_) =>
+            throw const HeapApiException('Unknown', unknownOutcome: true);
+      await openEditor(tester, org);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('editor-title')), 'My edits');
+      await revealTap(tester, find.byKey(const Key('editor-save')));
+      org.onGet = (_) async => detail(title: 'My edits');
+      await revealTap(tester, find.byKey(const Key('reload-saved-task')));
+      expect(
+        find.text(
+          'The saved task matches your changes. This confirms its current state.',
+        ),
+        findsOneWidget,
+      );
+      await revealTap(tester, find.byKey(const Key('return-confirmed')));
+      expect(find.text('Edit task'), findsNothing);
+      expect(org.puts, 1);
+    },
+  );
+  testWidgets(
+    'uncertain adopted saved version still needs possible-save leave guard',
+    (tester) async {
+      var left = 0;
+      final org = FakeOrganization()
+        ..onSave = (_) =>
+            throw const HeapApiException('Unknown', unknownOutcome: true);
+      await openEditor(tester, org, onLeave: () => left++);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('editor-title')), 'My edits');
+      await revealTap(tester, find.byKey(const Key('editor-save')));
+      await revealTap(tester, find.byKey(const Key('reload-saved-task')));
+      await revealTap(tester, find.byKey(const Key('use-saved-version')));
+      await tester.tap(find.byKey(const Key('editor-back')));
+      await tester.pumpAndSettle();
+      expect(find.text('Leave without checking the save?'), findsOneWidget);
+      await tester.tap(find.text('Leave and discard draft'));
+      await tester.pumpAndSettle();
+      expect(left, 1);
+      expect(org.puts, 1);
+    },
+  );
+  testWidgets(
+    'completed reconciliation shows saved values and waiting separately from preserved draft',
+    (tester) async {
+      final org = FakeOrganization()
+        ..onSave = (_) =>
+            throw const HeapApiException('Unknown', unknownOutcome: true);
+      await openEditor(tester, org);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('editor-title')), 'My draft');
+      await revealTap(tester, find.byKey(const Key('editor-save')));
+      org.onGet = (_) async => detail(
+        title: 'Completed server task',
+        status: 'completed',
+        waiting: true,
+      );
+      await revealTap(tester, find.byKey(const Key('reload-saved-task')));
+      expect(find.text('Task title: Completed server task'), findsOneWidget);
+      expect(find.text('Task title: My draft'), findsOneWidget);
+      expect(find.text('Awaiting external dependencies: Yes'), findsOneWidget);
+      expect(find.text('Awaiting external dependencies: No'), findsOneWidget);
+      expect(find.byKey(const Key('editor-save')), findsNothing);
+    },
+  );
+  testWidgets(
+    '320 width and 2x text has scrollable waiting/action and short keyboard fallback',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final org = FakeOrganization();
+      await openEditor(tester, org, scale: 2);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.ensureVisible(find.byKey(const Key('editor-awaiting')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('editor-title')));
+      tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('editor-save')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'waiting-only change gets dirty guard and never writes immediately',
+    (tester) async {
+      final org = FakeOrganization();
+      await openEditor(tester, org);
+      await tester.pumpAndSettle();
+      await revealTap(tester, find.byKey(const Key('editor-awaiting')));
+      expect(org.puts, 0);
+      await tester.tap(find.byKey(const Key('editor-back')));
+      await tester.pumpAndSettle();
+      expect(find.text('Discard changes?'), findsOneWidget);
+    },
+  );
+}
