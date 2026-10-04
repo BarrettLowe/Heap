@@ -85,6 +85,9 @@ Project editing verified: name and description edits (including clearing descrip
 - [x] Persist optional custom project MDI icon names and color strings in SQLite.
 
 Custom project icon/color fields default to `None` and survive explicit save/reopen; full suite: 297 passing tests.
+- [x] Expose project icon and color through the create, update, and read API.
+
+API verification covers setting and returning custom values through create/update/read; omitted values default to or clear to `None`.
 - [x] Add task completion with a completion timestamp and retained history.
 - [x] Add intentional task hard deletion.
   - [x] Add all-or-nothing batch deletion and dependency-link cleanup.

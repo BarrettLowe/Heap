@@ -17,7 +17,13 @@ class ProjectOperator:
         """Use the supplied store for project persistence."""
         self._store = store
 
-    def create(self, name: str, description: str | None = None) -> Project:
+    def create(
+        self,
+        name: str,
+        description: str | None = None,
+        icon: str | None = None,
+        color: str | None = None,
+    ) -> Project:
         """Save a new active project and return its in-memory snapshot."""
         now = current_time()
         project = Project(
@@ -27,6 +33,8 @@ class ProjectOperator:
             status=ProjectStatus.ACTIVE,
             created_at=now,
             updated_at=now,
+            icon=icon,
+            color=color,
         )
         self._store.save(project)
         return project
@@ -39,14 +47,28 @@ class ProjectOperator:
         """Return all projects in the store's stable display order."""
         return self._store.list_all()
 
-    def update(self, project_id: UUID, name: str, description: str | None) -> Project:
+    def update(
+        self,
+        project_id: UUID,
+        name: str,
+        description: str | None,
+        icon: str | None = None,
+        color: str | None = None,
+    ) -> Project:
         """Replace editable fields together; missing projects raise KeyError."""
         project = self._store.get(project_id)
         if project is None:
             raise KeyError(project_id)
-        if project.name != name or project.description != description:
+        if (
+            project.name != name
+            or project.description != description
+            or project.icon != icon
+            or project.color != color
+        ):
             project.name = name
             project.description = description
+            project.icon = icon
+            project.color = color
             project.updated_at = current_time()
             self._store.save(project)
         return project
