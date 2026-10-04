@@ -82,6 +82,9 @@ Verification: a captured item can become a scoped, on-deck task with or without 
 Task editing verified: title, priority, duration, and project edits survive reopening, preserve inbox status and unrelated fields, and leave unchanged values alone. Project assignment checks existence; missing IDs raise `KeyError`. Older task tables gain nullable project IDs. Full suite at that step: 74 passing tests, 100% line coverage.
 
 Project editing verified: name and description edits (including clearing descriptions) through `ProjectOperator` survive reopening SQLite and preserve unrelated fields. Unchanged values do not save or change timestamps; missing IDs raise `KeyError`. Existing direct-save snapshot tests remain unchanged. Full suite: 93 passing tests, 100% line coverage.
+- [x] Persist optional custom project MDI icon names and color strings in SQLite.
+
+Custom project icon/color fields default to `None` and survive explicit save/reopen; full suite: 297 passing tests.
 - [x] Add task completion with a completion timestamp and retained history.
 - [x] Add intentional task hard deletion.
   - [x] Add all-or-nothing batch deletion and dependency-link cleanup.
