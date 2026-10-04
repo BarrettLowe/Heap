@@ -249,11 +249,17 @@ Barrett requested CI tests for pull requests and publishing the Docker container
 to the registry. This step only covers build/test/release infrastructure.
 
 - [x] Verify the existing Python suite and coverage baseline.
-- [ ] Verify pull-request CI: locked Python dependencies, coverage, Flutter analysis/tests, and Docker build/smoke checks.
+- [x] Verify pull-request CI: locked Python dependencies, coverage, Flutter analysis/tests, and Docker build/smoke checks.
 - [ ] Verify GHCR publishing after successful checks, with `latest`, full commit SHA, and version tags.
 - [x] Document registry image use and publishing permissions.
 
 Local baseline: 297 Python tests passed with 97.75% line coverage. CI uses the
 existing Python 3.12/uv 0.9.22 container toolchain and Flutter 3.47.6, matching
-the stable revision recorded in `ui/.metadata`. Remote CI and registry publication
-remain pending until verified on GitHub.
+the stable revision recorded in `ui/.metadata`.
+
+Remote verification: [PR #1](https://github.com/BarrettLowe/Heap/pull/1) passed
+the Python coverage job, Flutter analysis/tests, and Docker build/configuration/
+health/capture/volume-persistence checks in
+[CI run 37198829776](https://github.com/BarrettLowe/Heap/actions/runs/37198829776).
+The publishing job was correctly skipped for the pull-request event. First GHCR
+publication remains pending merge: Barrett requested review before merging.
