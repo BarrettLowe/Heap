@@ -16,6 +16,26 @@ The SQLite file is `/data/heap.sqlite` in the container and lives in the named `
 
 The API routes are `GET /healthz`, `GET /api/v1/inbox`, `GET /api/v1/on-deck`, `GET /api/v1/tasks/{task_id}`, `POST /api/v1/tasks`, and `PUT /api/v1/tasks/{task_id}/organization`. Capture accepts JSON such as `{"title":"Repair the fence"}`. Organization requires title, priority, duration, the manual `externally_blocked` waiting flag, and the saved `expected_updated_at` comparison token. All 4 editable fields are saved together; use `null` to clear priority or duration. Unfinished tasks with priority and a known duration automatically belong On-deck, including tasks awaiting external dependencies. Incomplete tasks belong in Inbox. There is no move action; supplying the obsolete `move_to_on_deck` field returns `422`. Stale edits and completed-task edits return `409`; invalid request fields return `422`. There is no authentication; do not expose this service to an untrusted network.
 
+## Run a published image
+
+The registry image contains the Python backend. The Flutter app is built separately.
+To run the latest verified `master` image without cloning or building the repository:
+
+```sh
+docker pull ghcr.io/barrettlowe/heap:latest
+docker run -d --name heap --restart unless-stopped \
+  -p 127.0.0.1:8000:8000 \
+  -v heap-data:/data \
+  ghcr.io/barrettlowe/heap:latest
+```
+
+Use a `sha-<full-commit-sha>` tag instead of `latest` to pin a deployment.
+When replacing the container, retain the volume. Keep the API private and run only
+one container against that database, as described below. GitHub initially creates
+new packages as private: if pulling requires authentication, sign in to `ghcr.io`
+with a token that has `read:packages`, or set the package visibility to public in
+GitHub's package settings if anonymous pulls are desired.
+
 ## Configuration
 
 - `HEAP_DATABASE_PATH` selects the SQLite file. Compose sets it to `/data/heap.sqlite`; mount durable storage at `/data` when running outside Compose.

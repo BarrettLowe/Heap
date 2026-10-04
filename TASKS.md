@@ -242,3 +242,18 @@ Approved correction: qualification determines unfinished-task On-deck membership
 Prior-policy backend verified: independent coordinator-spawned Sol 6.1/high review approved the source, ran 218 tests with 99% line coverage, and probed no-ops/repeated moves, competing stale PUTs, rollback/reopening, strict validation, and CORS errors. Coordinator rebuilt the Docker preview and verified real HTTP save+move, both list transitions, unchanged-save behavior, preserved age on edits, stale conflict, each/both nullable requirement clears, restoration staying Inbox, renewed age on explicit moves, and PUT CORS. Frontend/code-review/visual/integration completion remains pending.
 
 Stop after this task flow. The manual external-waiting checkbox and visible future-tab placeholders are approved; no project/Today/Settings pages, ranking, filters, completion/history, dependency editor, recurrence, or offline storage.
+
+## 19. Pull-request CI and container publishing
+
+Barrett requested CI tests for pull requests and publishing the Docker container
+to the registry. This step only covers build/test/release infrastructure.
+
+- [x] Verify the existing Python suite and coverage baseline.
+- [ ] Verify pull-request CI: locked Python dependencies, coverage, Flutter analysis/tests, and Docker build/smoke checks.
+- [ ] Verify GHCR publishing after successful checks, with `latest`, full commit SHA, and version tags.
+- [x] Document registry image use and publishing permissions.
+
+Local baseline: 297 Python tests passed with 97.75% line coverage. CI uses the
+existing Python 3.12/uv 0.9.22 container toolchain and Flutter 3.47.6, matching
+the stable revision recorded in `ui/.metadata`. Remote CI and registry publication
+remain pending until verified on GitHub.
