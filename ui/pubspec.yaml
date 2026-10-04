@@ -18,3 +18,10 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/fonts/LICENSE.txt
+    - assets/fonts/APACHE-2.0.txt
+  fonts:
+    - family: HeapProjectIcons
+      fonts:
+        - asset: assets/fonts/heap-project-icons.ttf

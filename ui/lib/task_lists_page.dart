@@ -12,21 +12,38 @@ import 'task_detail.dart';
 import 'task_editor_page.dart';
 import 'task_toolbar.dart';
 import 'task_widgets.dart';
+import 'project.dart';
+import 'project_controller.dart';
+import 'project_editor_page.dart';
+import 'project_widgets.dart';
 
 class TaskListsPage extends StatefulWidget {
   const TaskListsPage({
     super.key,
     required this.inbox,
     required this.organization,
+    required this.projects,
   });
   final InboxController inbox;
   final OrganizationService organization;
+  final ProjectService projects;
   @override
   State<TaskListsPage> createState() => _TaskListsPageState();
 }
 
 class _TaskListsPageState extends State<TaskListsPage> {
   late final OnHeapController _heap;
+  late final ProjectsController _projects;
+  bool _showProjects = false;
+  final _uncertainProjectDeletions = <String>{};
+  bool _projectsStarted = false;
+  String? _projectNotice;
+  String? _highlightedProject;
+  final _projectsScroll = ScrollController();
+  final _projectsHeading = FocusNode();
+  final _addProjectFocus = FocusNode();
+  final _projectKeys = <String, GlobalKey>{};
+  final _projectFocus = <String, FocusNode>{};
   bool _onHeap = false;
   bool _heapStarted = false;
   HeapFilter _filter = const HeapFilter.none();
@@ -56,12 +73,20 @@ class _TaskListsPageState extends State<TaskListsPage> {
   void initState() {
     super.initState();
     _heap = OnHeapController(widget.organization);
+    _projects = ProjectsController(widget.projects);
     widget.inbox.load();
   }
 
   @override
   void dispose() {
     _heap.dispose();
+    _projects.dispose();
+    _projectsScroll.dispose();
+    _projectsHeading.dispose();
+    _addProjectFocus.dispose();
+    for (final focus in _projectFocus.values) {
+      focus.dispose();
+    }
     _captureText.dispose();
     _captureFieldFocus.dispose();
     _captureButtonFocus.dispose();
@@ -97,7 +122,12 @@ class _TaskListsPageState extends State<TaskListsPage> {
   }
 
   void _revealSelector() {
+    if (_editing || _captureOpen) return;
     _interacted();
+    if (_showProjects) {
+      setState(() => _showProjects = false);
+      return;
+    }
     final scroll = _onHeap ? _heapScroll : _inboxScroll;
     if (scroll.hasClients) {
       scroll.animateTo(
@@ -128,6 +158,7 @@ class _TaskListsPageState extends State<TaskListsPage> {
           if (!mounted) return;
           setState(() {
             _onHeap = false;
+            _showProjects = false;
             _highlightedId = task.id;
           });
           ScaffoldMessenger.of(
@@ -157,6 +188,7 @@ class _TaskListsPageState extends State<TaskListsPage> {
         builder: (_) => TaskEditorPage(
           id: id,
           service: widget.organization,
+          projects: widget.projects,
           sourceOnHeap: sourceHeap,
           onUncertainLeave: () {
             widget.inbox.invalidate();
@@ -218,7 +250,8 @@ class _TaskListsPageState extends State<TaskListsPage> {
           epoch != _interactionEpoch ||
           _editing ||
           _captureOpen ||
-          _onHeap != heap) {
+          _onHeap != heap ||
+          _showProjects) {
         return;
       }
       final excluded =
@@ -246,6 +279,116 @@ class _TaskListsPageState extends State<TaskListsPage> {
     });
   }
 
+  void _selectProjects() {
+    if (_editing || _captureOpen) return;
+    _interacted();
+    FocusManager.instance.primaryFocus?.unfocus();
+    _projectsStarted = true;
+    if (!_showProjects) _projects.load();
+    setState(() => _showProjects = true);
+  }
+
+  void _invalidateDeletedTasks(String id, {required bool uncertain}) {
+    if (!mounted) return;
+    setState(() {
+      if (uncertain) {
+        _uncertainProjectDeletions.add(id);
+      } else {
+        _uncertainProjectDeletions.remove(id);
+      }
+    });
+    widget.inbox.clearAfterProjectDeletion();
+    _heap.clearAfterProjectDeletion();
+    _heapStarted = true;
+    widget.inbox.load();
+    _heap.load();
+  }
+
+  Future<void> _openProject([String? id]) async {
+    if (_editing || _captureOpen) return;
+    _interacted();
+    _editing = true;
+    FocusManager.instance.primaryFocus?.unfocus();
+    final result = await Navigator.of(context).push<ProjectEditorResult>(
+      MaterialPageRoute(
+        builder: (_) => ProjectEditorPage(
+          id: id,
+          service: widget.projects,
+          onDeletionRisk: (uncertain) {
+            if (id != null) {
+              _invalidateDeletedTasks(id, uncertain: uncertain);
+            }
+          },
+          onUncertainLeave: _projects.load,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    _editing = false;
+    if (result != null) {
+      if (result.deleted) {
+        _projects.removeConfirmed(id!);
+      } else {
+        _projects.applyConfirmed(result.project!);
+      }
+      setState(() {
+        _highlightedProject = result.project?.id;
+        _projectNotice = result.deleted
+            ? 'Project and all assigned tasks deleted.'
+            : result.created
+            ? 'Project added.'
+            : 'Project saved.';
+      });
+    }
+    final epoch = _interactionEpoch;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          epoch != _interactionEpoch ||
+          !_showProjects ||
+          _editing ||
+          _captureOpen) {
+        return;
+      }
+      if (result?.deleted == true) {
+        _projectsHeading.requestFocus();
+        if (_projectsHeading.context case final heading?) {
+          Scrollable.ensureVisible(heading);
+        }
+        return;
+      }
+      final target = result?.project?.id ?? id;
+      final row = _projectKeys[target]?.currentContext;
+      if (row != null) {
+        if (result != null) {
+          Scrollable.ensureVisible(
+            row,
+            duration: const Duration(milliseconds: 200),
+          );
+        }
+        _projectFocus[target]?.requestFocus();
+      } else {
+        _addProjectFocus.requestFocus();
+      }
+    });
+    if (result != null) await _projects.load();
+  }
+
+  Widget _projectsList() => ProjectsListBody(
+    controller: _projects,
+    scroll: _projectsScroll,
+    headingFocus: _projectsHeading,
+    addFocus: _addProjectFocus,
+    onAdd: _openProject,
+    onOpen: _openProject,
+    rowKey: (id) => _projectKeys.putIfAbsent(
+      id,
+      () => GlobalKey(debugLabel: 'project-$id'),
+    ),
+    rowFocus: (id) => _projectFocus.putIfAbsent(id, FocusNode.new),
+    highlightedId: _highlightedProject,
+    notice: _projectNotice,
+  );
+
   Widget? _noticePanel() => _savedNotice == null
       ? null
       : StatusPanel(
@@ -271,7 +414,9 @@ class _TaskListsPageState extends State<TaskListsPage> {
     onClearFilter: heap ? () => _changeFilter(const HeapFilter.none()) : null,
     loaded: heap ? _heap.loaded : widget.inbox.loaded,
     loading: heap ? _heap.loading : widget.inbox.loading,
-    stale: heap ? _heap.stale : widget.inbox.stale,
+    stale:
+        _uncertainProjectDeletions.isNotEmpty ||
+        (heap ? _heap.stale : widget.inbox.stale),
     error: heap ? _heap.error : widget.inbox.error,
     scroll: heap ? _heapScroll : _inboxScroll,
     headingFocus: heap ? _heapHeading : _inboxHeading,
@@ -309,15 +454,25 @@ class _TaskListsPageState extends State<TaskListsPage> {
                     vertical: 14,
                   ),
                   child: ListenableBuilder(
-                    listenable: Listenable.merge([widget.inbox, _heap]),
+                    listenable: Listenable.merge([
+                      widget.inbox,
+                      _heap,
+                      _projects,
+                    ]),
                     builder: (context, _) => LayoutBuilder(
                       builder: (context, constraints) {
                         final refresh = IconButton(
                           key: const Key('refresh'),
-                          tooltip: _onHeap
+                          tooltip: _showProjects
+                              ? 'Refresh projects'
+                              : _onHeap
                               ? 'Refresh the heap'
                               : 'Refresh inbox',
-                          onPressed: _onHeap
+                          onPressed: _showProjects
+                              ? _projects.loading
+                                    ? null
+                                    : _projects.load
+                              : _onHeap
                               ? _heap.loading
                                     ? null
                                     : _heap.load
@@ -353,13 +508,25 @@ class _TaskListsPageState extends State<TaskListsPage> {
               ),
               Expanded(
                 child: ListenableBuilder(
-                  listenable: Listenable.merge([widget.inbox, _heap]),
+                  listenable: Listenable.merge([
+                    widget.inbox,
+                    _heap,
+                    _projects,
+                  ]),
                   builder: (context, _) => IndexedStack(
-                    index: _onHeap ? 1 : 0,
+                    index: _showProjects
+                        ? 2
+                        : _onHeap
+                        ? 1
+                        : 0,
                     children: [
                       _list(false),
                       if (_heapStarted)
                         _list(true)
+                      else
+                        const SizedBox.shrink(),
+                      if (_projectsStarted)
+                        _projectsList()
                       else
                         const SizedBox.shrink(),
                     ],
@@ -372,6 +539,8 @@ class _TaskListsPageState extends State<TaskListsPage> {
         bottomNavigationBar: TaskToolbar(
           onTasks: _revealSelector,
           onCapture: _openCapture,
+          onProjects: _selectProjects,
+          projectsSelected: _showProjects,
           captureFocus: _captureButtonFocus,
         ),
       ),

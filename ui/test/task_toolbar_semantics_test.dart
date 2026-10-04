@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:heap_app/inbox_controller.dart';
 import 'package:heap_app/task_lists_page.dart';
 
+import 'project_fakes.dart';
 import 'task_flow_fakes.dart';
 
 void expectSelectedTasks(WidgetTester tester) {
@@ -52,7 +53,11 @@ void main() {
                     .copyWith(textScaler: TextScaler.linear(layout.$2)),
                 child: child!,
               ),
-              home: TaskListsPage(inbox: inbox, organization: organization),
+              home: TaskListsPage(
+                projects: FakeProjects(),
+                inbox: inbox,
+                organization: organization,
+              ),
             ),
           );
           await tester.pumpAndSettle();

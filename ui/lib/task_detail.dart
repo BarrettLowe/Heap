@@ -13,15 +13,28 @@ class TaskDetail extends InboxTask {
     required super.durationMinutes,
     required super.externallyBlocked,
     required this.onHeapSince,
+    required this.projectId,
   });
   final String updatedAtToken;
   final DateTime? onHeapSince;
+  final String? projectId;
 
   factory TaskDetail.fromJson(Object? value) {
     final base = InboxTask.fromJson(value, allowOtherStatuses: true);
     final json = value as Map<String, dynamic>;
     if (!json.containsKey('on_heap_since')) {
       throw const FormatException('Missing on-the-heap timestamp.');
+    }
+    if (!json.containsKey('project_id')) {
+      throw const FormatException('Missing project association.');
+    }
+    final projectId = json['project_id'];
+    if (projectId != null &&
+        (projectId is! String ||
+            !RegExp(
+              r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+            ).hasMatch(projectId))) {
+      throw const FormatException('Invalid project association.');
     }
     final since = json['on_heap_since'];
     if (since != null && since is! String) {
@@ -47,6 +60,7 @@ class TaskDetail extends InboxTask {
       durationMinutes: base.durationMinutes,
       externallyBlocked: base.externallyBlocked,
       onHeapSince: timestamp,
+      projectId: projectId as String?,
     );
   }
 }
@@ -57,22 +71,26 @@ class OrganizationDraft {
     this.priority,
     this.durationMinutes,
     required this.externallyBlocked,
+    required this.projectId,
   });
   factory OrganizationDraft.fromTask(TaskDetail task) => OrganizationDraft(
     title: task.title,
     priority: task.priority,
     durationMinutes: task.durationMinutes,
     externallyBlocked: task.externallyBlocked,
+    projectId: task.projectId,
   );
   final String title;
   final int? priority;
   final int? durationMinutes;
   final bool externallyBlocked;
+  final String? projectId;
   bool sameFields(OrganizationDraft other) =>
       title == other.title &&
       priority == other.priority &&
       durationMinutes == other.durationMinutes &&
-      externallyBlocked == other.externallyBlocked;
+      externallyBlocked == other.externallyBlocked &&
+      projectId == other.projectId;
 }
 
 class OrganizationSubmission {
@@ -88,6 +106,7 @@ class OrganizationSubmission {
     'priority': draft.priority,
     'duration_minutes': draft.durationMinutes,
     'externally_blocked': draft.externallyBlocked,
+    'project_id': draft.projectId,
     'expected_updated_at': original.updatedAtToken,
   };
   bool matches(TaskDetail task) =>
@@ -96,5 +115,6 @@ class OrganizationSubmission {
       task.priority == draft.priority &&
       task.durationMinutes == draft.durationMinutes &&
       task.externallyBlocked == draft.externallyBlocked &&
-      task.status == expectedStatus;
+      task.status == expectedStatus &&
+      task.projectId == draft.projectId;
 }

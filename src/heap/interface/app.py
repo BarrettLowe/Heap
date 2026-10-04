@@ -68,6 +68,8 @@ class ProjectCreateRequest(BaseModel):
 
     name: StrictStr
     description: StrictStr | None = None
+    icon: StrictStr | None = None
+    color: StrictStr | None = None
 
     @field_validator("name")
     @classmethod
@@ -258,6 +260,8 @@ def _serialize_project(project: Project) -> dict[str, str | None]:
             if project.completed_at is not None
             else None
         ),
+        "icon": project.icon,
+        "color": project.color,
     }
 
 
@@ -389,7 +393,7 @@ def create_app(
             return _validation_error_response(error)
         with request.app.state.operation_lock:
             project = request.app.state.projects.create(
-                payload.name, payload.description
+                payload.name, payload.description, payload.icon, payload.color
             )
         return _serialize_project(project)
 
@@ -454,7 +458,11 @@ def create_app(
         with request.app.state.operation_lock:
             try:
                 project = request.app.state.projects.update(
-                    parsed_id, payload.name, payload.description
+                    parsed_id,
+                    payload.name,
+                    payload.description,
+                    payload.icon,
+                    payload.color,
                 )
             except KeyError:
                 return _error_response(404, "not_found", "Not found.")

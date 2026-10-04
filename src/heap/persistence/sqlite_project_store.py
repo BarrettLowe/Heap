@@ -25,7 +25,9 @@ class SQLiteProjectStore(ProjectStore):
                 status TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
-                completed_at TEXT
+                completed_at TEXT,
+                icon TEXT,
+                color TEXT
             )
             """
         )
@@ -37,15 +39,18 @@ class SQLiteProjectStore(ProjectStore):
             self._connection.execute(
                 """
                 INSERT INTO projects
-                    (id, name, description, status, created_at, updated_at, completed_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (id, name, description, status, created_at, updated_at, completed_at,
+                     icon, color)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
                     description = excluded.description,
                     status = excluded.status,
                     created_at = excluded.created_at,
                     updated_at = excluded.updated_at,
-                    completed_at = excluded.completed_at
+                    completed_at = excluded.completed_at,
+                    icon = excluded.icon,
+                    color = excluded.color
                 """,
                 (
                     str(project.id),
@@ -55,6 +60,8 @@ class SQLiteProjectStore(ProjectStore):
                     project.created_at.isoformat(),
                     project.updated_at.isoformat(),
                     project.completed_at.isoformat() if project.completed_at else None,
+                    project.icon,
+                    project.color,
                 ),
             )
 
@@ -62,7 +69,8 @@ class SQLiteProjectStore(ProjectStore):
         """Load an independent project snapshot, or None for an absent ID."""
         row = self._connection.execute(
             """
-            SELECT id, name, description, status, created_at, updated_at, completed_at
+            SELECT id, name, description, status, created_at, updated_at, completed_at,
+                   icon, color
             FROM projects WHERE id = ?
             """,
             (str(project_id),),
@@ -77,13 +85,16 @@ class SQLiteProjectStore(ProjectStore):
             created_at=datetime.fromisoformat(row[4]),
             updated_at=datetime.fromisoformat(row[5]),
             completed_at=datetime.fromisoformat(row[6]) if row[6] else None,
+            icon=row[7],
+            color=row[8],
         )
 
     def list_all(self) -> list[Project]:
         """Load every project ordered by case-insensitive name, then ID."""
         rows = self._connection.execute(
             """
-            SELECT id, name, description, status, created_at, updated_at, completed_at
+            SELECT id, name, description, status, created_at, updated_at, completed_at,
+                   icon, color
             FROM projects ORDER BY name COLLATE NOCASE, name, id
             """
         ).fetchall()
@@ -111,7 +122,17 @@ class SQLiteProjectStore(ProjectStore):
 
     @staticmethod
     def _project_from_row(
-        row: tuple[str, str, str | None, str, str, str, str | None],
+        row: tuple[
+            str,
+            str,
+            str | None,
+            str,
+            str,
+            str,
+            str | None,
+            str | None,
+            str | None,
+        ],
     ) -> Project:
         """Convert a stored row into an independent project snapshot."""
         return Project(
@@ -122,6 +143,8 @@ class SQLiteProjectStore(ProjectStore):
             created_at=datetime.fromisoformat(row[4]),
             updated_at=datetime.fromisoformat(row[5]),
             completed_at=datetime.fromisoformat(row[6]) if row[6] else None,
+            icon=row[7],
+            color=row[8],
         )
 
     def close(self) -> None:

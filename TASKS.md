@@ -82,6 +82,12 @@ Verification: a captured item can become a scoped, on-deck task with or without 
 Task editing verified: title, priority, duration, and project edits survive reopening, preserve inbox status and unrelated fields, and leave unchanged values alone. Project assignment checks existence; missing IDs raise `KeyError`. Older task tables gain nullable project IDs. Full suite at that step: 74 passing tests, 100% line coverage.
 
 Project editing verified: name and description edits (including clearing descriptions) through `ProjectOperator` survive reopening SQLite and preserve unrelated fields. Unchanged values do not save or change timestamps; missing IDs raise `KeyError`. Existing direct-save snapshot tests remain unchanged. Full suite: 93 passing tests, 100% line coverage.
+- [x] Persist optional custom project MDI icon names and color strings in SQLite.
+
+Custom project icon/color fields default to `None` and survive explicit save/reopen; full suite: 297 passing tests.
+- [x] Expose project icon and color through the create, update, and read API.
+
+API verification covers setting and returning custom values through create/update/read; omitted values default to or clear to `None`.
 - [x] Add task completion with a completion timestamp and retained history.
 - [x] Add intentional task hard deletion.
   - [x] Add all-or-nothing batch deletion and dependency-link cleanup.
@@ -263,3 +269,80 @@ health/capture/volume-persistence checks in
 [CI run 37198829776](https://github.com/BarrettLowe/Heap/actions/runs/37198829776).
 The publishing job was correctly skipped for the pull-request event. First GHCR
 publication remains pending merge: Barrett requested review before merging.
+
+## 20. Project list and editor UI
+
+Barrett approved the design and Flutter implementation. Barrett owns the
+backend/API; Frontend owns the UI, with independent code and visual review.
+
+- [x] Design a simple list with each project's color, icon, and name, plus Add project.
+- [x] Design add/edit for those 3 fields and deletion with a clear warning that all assigned tasks are permanently deleted.
+- [x] Review the proposal with Barrett before implementation.
+- [x] Implement Projects navigation, list, and add/edit/delete UI against the existing API.
+- [x] Pass independent code review and Flutter checks.
+- [x] Verify actual Android emulator and web project flows and visual match.
+- [ ] Verify on a physical phone.
+
+Design: `docs/project-editing-design.md`; mockup: `docs/project-editing-mockup.svg`.
+Keep the existing Heap style. No project task view or unrelated features.
+
+Coordinator checks so far: 114 Flutter tests and analysis passed; web/debug APK
+built. Against an isolated Compose API, Firefox and emulator verified creation,
+all 3 edits, picker-only dirty cancellation, delete cancellation and confirmation,
+and task capture remaining separate. Firefox confirmed deletion removes assigned
+Inbox/Heap tasks but retains standalone tasks; initial Enter cancels deletion.
+Android at 320 width / 2.0 text kept menus and destructive actions reachable.
+Saved colors/icons outside the menus and the hidden description survived
+name-only editing; explicit None cleared color/icon. A stopped API left web rows
+visibly stale, and the persistent database retained saved values after restart.
+
+Independent review found a delayed-delete stale-task issue; Frontend added a
+failing regression then fixed it. UI-only task transport now preserves the
+API's required nullable `project_id`, without adding assignment controls.
+Coordinator reran analysis and all 126 tests, and verified final rebuilt apps:
+Firefox saves both standalone and assigned tasks without losing associations;
+Android task Save and Projects navigation work; final web create/pickers/delete
+smoke passes. A create-404 error-path bug was fixed with a failing regression;
+a live browser-injected 404 preserved all 3 fields and deliberate retry succeeded.
+Web and debug APK builds pass. No backend files changed.
+
+Designer approved the represented settled web, Android, and 320/2.0 text
+screenshots with no blocking findings. Independent reviewer approved final UI
+source after the delayed-delete and create-404 fixes. Conservative uncertain-delete
+stale warnings may remain until checked or restarted; this is nonblocking.
+Physical phone is not connected and remains unverified.
+The emulator uses a floating keyboard; conventional docked-keyboard and live
+screen-reader interaction remain unverified.
+
+## 21. Expanded project pickers
+
+Barrett chose common icons plus Browse all for the full offline MDI library,
+and requested 20 unnamed color circles in an always-visible grid, ordered
+chromatically with an even spread across the spectrum. This is UI-only;
+backend/API remain Barrett-owned. Luna implements and Sol reviews this work.
+Shared design: `docs/project-editing-design.md`.
+
+- [x] Bundle the full MDI library and add searchable Browse all, keeping quick choices.
+- [x] Show 20 hue-ordered color circles plus None inline, with no dropdown or color names.
+- [x] Pass combined independent review and Flutter checks after both changes are ready.
+- [x] Verify real Android/web icon search, selection, colors, cancellation, and saved values.
+- [x] Designer: review actual narrow/large-text and wide-web picker screenshots.
+- [ ] Verify on a physical phone.
+
+MDI 7.4.47 bundles all 7,447 icons. Luna implemented the inline grid with
+18-degree HSL steps (60% saturation / 45% lightness). Sol approved the final
+changes after fixes for None/checkmark overlap, focus-ring contrast, and a
+smaller selection badge that keeps the chosen hue visible.
+Coordinator independently passed analysis and all 153 tests, rebuilt web/debug
+APK with the correct `HEAP_API_BASE_URL`, and exercised both final apps.
+
+Firefox and emulator verified inline colors, full-library search/selection,
+actual non-common glyphs, draft-only edits, saved hex/icon names, and reopening.
+Web verified no results, Clear, Escape and dirty discard; Android at 320 width /
+2.0 text verified None selection, browser cancellation and dirty discard. Actual
+narrow Firefox viewport was 500 pixels (browser minimum), not 320. No backend
+files changed. Physical-phone/docked-keyboard/live screen-reader checks remain
+unverified. Designer approved the other represented picker states, including the
+readable 2-column Android 320/2.0 icon browser as an acceptable design deviation.
+Sol Designer approved the final selected-hue and None screenshots, including
+Android 320/2.0 text, with no blocking visual findings.

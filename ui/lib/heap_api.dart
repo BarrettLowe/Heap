@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import 'inbox_task.dart';
 import 'task_detail.dart';
+import 'project.dart';
 
 export 'inbox_task.dart';
 
@@ -40,7 +41,14 @@ abstract interface class OrganizationService {
   Future<TaskDetail> saveOrganization(OrganizationSubmission submission);
 }
 
-class HeapApi implements InboxService, OrganizationService {
+abstract interface class ProjectService {
+  Future<List<Project>> listProjects();
+  Future<Project> getProject(String id);
+  Future<Project> saveProject(ProjectDraft draft, {Project? original});
+  Future<void> deleteProject(String id);
+}
+
+class HeapApi implements InboxService, OrganizationService, ProjectService {
   HeapApi({
     required this.client,
     required this.baseUri,
@@ -198,6 +206,97 @@ class HeapApi implements InboxService, OrganizationService {
     }
   }
 
+  @override
+  Future<List<Project>> listProjects() async {
+    final response = await _organizationRead('/api/v1/projects');
+    try {
+      final body = jsonDecode(response.body);
+      if (body is! Map<String, dynamic> || body['items'] is! List) {
+        throw const FormatException('Invalid projects list.');
+      }
+      final projects = (body['items'] as List).map(Project.fromJson).toList();
+      if (projects.map((project) => project.id).toSet().length !=
+          projects.length) {
+        throw const FormatException('Duplicate project IDs.');
+      }
+      return List.unmodifiable(projects);
+    } on FormatException {
+      throw const HeapApiException('The server returned an invalid response.');
+    }
+  }
+
+  @override
+  Future<Project> getProject(String id) async {
+    final response = await _organizationRead('/api/v1/projects/$id');
+    try {
+      final project = Project.fromJson(jsonDecode(response.body));
+      if (project.id != id) throw const FormatException('Wrong project ID.');
+      return project;
+    } on FormatException {
+      throw const HeapApiException('The server returned an invalid response.');
+    }
+  }
+
+  static const _unknownProjectWrite = HeapApiException(
+    'The request may have succeeded. Your draft has been kept. Check projects before trying again.',
+    unknownOutcome: true,
+  );
+
+  @override
+  Future<Project> saveProject(ProjectDraft draft, {Project? original}) async {
+    try {
+      final uri = baseUri.resolve(
+        '/api/v1/projects${original == null ? '' : '/${original.id}'}',
+      );
+      final headers = const {'content-type': 'application/json'};
+      final body = jsonEncode(draft.toJson(description: original?.description));
+      final response =
+          await (original == null
+                  ? client.post(uri, headers: headers, body: body)
+                  : client.put(uri, headers: headers, body: body))
+              .timeout(timeout);
+      final expectedStatus = original == null ? 201 : 200;
+      _checkProjectWrite(response, expectedStatus);
+      final project = Project.fromJson(jsonDecode(response.body));
+      if (original != null && project.id != original.id) {
+        throw const FormatException('Wrong saved project ID.');
+      }
+      return project;
+    } on HeapApiException {
+      rethrow;
+    } catch (_) {
+      throw _unknownProjectWrite;
+    }
+  }
+
+  @override
+  Future<void> deleteProject(String id) async {
+    try {
+      final response = await client
+          .delete(baseUri.resolve('/api/v1/projects/$id'))
+          .timeout(timeout);
+      _checkProjectWrite(response, 200);
+      final body = jsonDecode(response.body);
+      if (body is! Map<String, dynamic> || body['deleted'] != true) {
+        throw const FormatException('Invalid deletion response.');
+      }
+    } on HeapApiException {
+      rethrow;
+    } catch (_) {
+      throw _unknownProjectWrite;
+    }
+  }
+
+  void _checkProjectWrite(http.Response response, int expectedStatus) {
+    if (response.statusCode >= 500 ||
+        (response.statusCode < 400 && response.statusCode != expectedStatus)) {
+      throw _unknownProjectWrite;
+    }
+    if (response.statusCode != expectedStatus) {
+      throw _organizationError(response);
+    }
+  }
+
   static const _unknownSave = HeapApiException(
     'The save may have succeeded. Your draft has been kept. Reload the saved task before trying again.',
     unknownOutcome: true,
@@ -216,6 +315,9 @@ class HeapApi implements InboxService, OrganizationService {
           for (final field in error['fields'] as List) {
             if (field is Map<String, dynamic> &&
                 {
+                  'name',
+                  'color',
+                  'icon',
                   'title',
                   'priority',
                   'duration_minutes',

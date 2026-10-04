@@ -53,10 +53,18 @@ def test_project_changes_persist_only_after_explicit_save(tmp_path: Path) -> Non
         projects = ProjectOperator(store)
         project = projects.create("Repair the fence")
         project.name = "Replace the north fence"
+        project.icon = "home-outline"
+        project.color = "#336699"
         saved = projects.get(project.id)
         assert saved is not None
         assert saved.name == "Repair the fence"
+        assert saved.icon is None
+        assert saved.color is None
         store.save(project)
 
     with SQLiteProjectStore(database) as store:
-        assert ProjectOperator(store).get(project.id) == project
+        saved = ProjectOperator(store).get(project.id)
+        assert saved == project
+        assert saved is not None
+        assert saved.icon == "home-outline"
+        assert saved.color == "#336699"

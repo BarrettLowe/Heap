@@ -122,6 +122,15 @@ class InboxController extends ChangeNotifier {
     _notify();
   }
 
+  void clearAfterProjectDeletion() {
+    invalidate();
+    _tasks = const [];
+    _loaded = false;
+    _stale = false;
+    _error = null;
+    _notify();
+  }
+
   void applyConfirmed(TaskDetail task) {
     invalidate();
     final merged =

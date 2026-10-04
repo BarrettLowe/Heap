@@ -33,7 +33,13 @@ def test_project_crud_and_full_task_view_round_trip(
     monkeypatch.setattr(task_operator, "current_time", lambda: CREATED)
     with api_client(database) as client:
         created = client.post(
-            "/api/v1/projects", json={"name": "  Fence  ", "description": "Repair"}
+            "/api/v1/projects",
+            json={
+                "name": "  Fence  ",
+                "description": "Repair",
+                "icon": "fence",
+                "color": "#336699",
+            },
         )
         assert created.status_code == 201
         project = created.json()
@@ -45,6 +51,8 @@ def test_project_crud_and_full_task_view_round_trip(
             "created_at": "2026-08-01T12:00:00.000000Z",
             "updated_at": "2026-08-01T12:00:00.000000Z",
             "completed_at": None,
+            "icon": "fence",
+            "color": "#336699",
         }
         assert client.get("/api/v1/projects").json() == {"items": [project]}
         assert client.get(f"/api/v1/projects/{project['id']}").json() == project
@@ -80,13 +88,20 @@ def test_project_crud_and_full_task_view_round_trip(
         monkeypatch.setattr(project_operator, "current_time", lambda: EDITED)
         updated = client.put(
             f"/api/v1/projects/{project['id']}",
-            json={"name": "Fence repair", "description": None},
+            json={
+                "name": "Fence repair",
+                "description": None,
+                "icon": "hammer",
+                "color": None,
+            },
         )
         assert updated.status_code == 200
         assert updated.json() == {
             **project,
             "name": "Fence repair",
             "description": None,
+            "icon": "hammer",
+            "color": None,
             "updated_at": "2026-08-02T12:00:00.000000Z",
         }
         assert client.get(f"/api/v1/projects/{project['id']}/tasks").json() == {

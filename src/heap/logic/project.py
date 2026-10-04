@@ -21,3 +21,5 @@ class Project:
     created_at: datetime
     updated_at: datetime
     completed_at: datetime | None = None
+    icon: str | None = None
+    color: str | None = None

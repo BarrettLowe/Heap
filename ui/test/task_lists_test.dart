@@ -8,6 +8,7 @@ import 'package:heap_app/on_heap_controller.dart';
 import 'package:heap_app/task_detail.dart';
 import 'package:heap_app/task_lists_page.dart';
 
+import 'project_fakes.dart';
 import 'task_flow_fakes.dart';
 
 Future<void> host(
@@ -23,7 +24,11 @@ Future<void> host(
             .copyWith(textScaler: TextScaler.linear(scale)),
         child: child!,
       ),
-      home: TaskListsPage(inbox: inbox, organization: org),
+      home: TaskListsPage(
+        projects: FakeProjects(),
+        inbox: inbox,
+        organization: org,
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -55,9 +60,9 @@ void main() {
       final inbox = InboxController(service);
       await host(tester, inbox, FakeOrganization(), scale: 2);
       expect(tester.takeException(), isNull);
-      expect(find.text('Soon'), findsNWidgets(3));
+      expect(find.text('Soon'), findsNWidgets(2));
       expect(
-        tester.getCenter(find.byKey(const Key('soon-projects'))).dy,
+        tester.getCenter(find.byKey(const Key('projects-toolbar'))).dy,
         greaterThan(tester.getCenter(find.byKey(const Key('soon-today'))).dy),
       );
       tester.view.physicalSize = const Size(1280, 900);
@@ -282,7 +287,7 @@ void main() {
       final inbox = InboxController(service);
       final org = FakeOrganization();
       await host(tester, inbox, org);
-      for (final label in ['Today', 'Projects', 'Settings']) {
+      for (final label in ['Today', 'Settings']) {
         final semantics = tester.widget<Semantics>(
           find.byWidgetPredicate(
             (w) =>

@@ -8,3 +8,4 @@
 - Track progress in `TASKS.md`; requirements are in `personal_task_project_manager_v1_spec.md`. Check off work only after verification.
 - This is a personal project: prefer the simplest change that delivers the agreed behavior. Existing development databases are disposable; no legacy compatibility work is needed.
 - Deleting a project permanently deletes every task assigned to it.
+- This app is not live. You may adjust the database format, columns, schema at will without considering migration.

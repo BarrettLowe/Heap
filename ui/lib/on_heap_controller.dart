@@ -43,6 +43,15 @@ class OnHeapController extends ChangeNotifier {
     _notify();
   }
 
+  void clearAfterProjectDeletion() {
+    invalidate();
+    _tasks = const [];
+    loaded = false;
+    stale = false;
+    error = null;
+    _notify();
+  }
+
   void applyConfirmed(TaskDetail task) {
     invalidate();
     final merged =
