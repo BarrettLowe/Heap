@@ -10,6 +10,7 @@ import 'package:heap_app/task_detail.dart';
 import 'package:heap_app/task_lists_page.dart';
 import 'package:heap_app/task_widgets.dart';
 
+import 'project_fakes.dart';
 import 'task_flow_fakes.dart';
 
 const secondId = '00000000-0000-0000-0000-000000000001';
@@ -35,7 +36,11 @@ Future<InboxController> hostFilters(
             .copyWith(textScaler: TextScaler.linear(scale)),
         child: child!,
       ),
-      home: TaskListsPage(inbox: inbox, organization: organization),
+      home: TaskListsPage(
+        projects: FakeProjects(),
+        inbox: inbox,
+        organization: organization,
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -161,7 +166,11 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(
         MaterialApp(
-          home: TaskListsPage(inbox: inbox, organization: org),
+          home: TaskListsPage(
+            projects: FakeProjects(),
+            inbox: inbox,
+            organization: org,
+          ),
         ),
       );
       await tester.pumpAndSettle();

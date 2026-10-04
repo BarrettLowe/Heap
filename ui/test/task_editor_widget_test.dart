@@ -5,12 +5,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:heap_app/heap_api.dart';
 import 'package:heap_app/task_detail.dart';
 import 'package:heap_app/task_editor_page.dart';
+import 'package:heap_app/project_widgets.dart';
 
 import 'task_flow_fakes.dart';
+import 'project_fakes.dart';
 
 Future<void> openEditor(
   WidgetTester tester,
   FakeOrganization org, {
+  FakeProjects? projects,
   VoidCallback? onLeave,
   double scale = 1,
 }) async {
@@ -29,6 +32,10 @@ Future<void> openEditor(
                 builder: (_) => TaskEditorPage(
                   id: taskId,
                   service: org,
+                  projects:
+                      projects ??
+                      (FakeProjects()
+                        ..items = [project(id: assignedProjectId)]),
                   sourceOnHeap: false,
                   onUncertainLeave: onLeave ?? () {},
                 ),
@@ -53,6 +60,85 @@ Future<void> revealTap(WidgetTester tester, Finder target) async {
 }
 
 void main() {
+  for (final projectId in [null, assignedProjectId]) {
+    testWidgets(
+      'task editor shows project picker and preserves association $projectId',
+      (tester) async {
+        final org = FakeOrganization()
+          ..onGet = (_) async => detail(projectId: projectId);
+        await openEditor(tester, org);
+        await tester.pumpAndSettle();
+        expect(find.text('Project'), findsOneWidget);
+        expect(
+          find.text(projectId == null ? 'No project' : 'Garden'),
+          findsOneWidget,
+        );
+        await tester.enterText(
+          find.byKey(const Key('editor-title')),
+          'Edited task',
+        );
+        await revealTap(tester, find.byKey(const Key('editor-save')));
+        expect(org.lastSubmission!.toJson().containsKey('project_id'), true);
+        expect(org.lastSubmission!.toJson()['project_id'], projectId);
+      },
+    );
+  }
+  testWidgets('project can be reassigned or cleared and is submitted', (
+    tester,
+  ) async {
+    final org = FakeOrganization()
+      ..onGet = (_) async => detail(projectId: assignedProjectId);
+    final projects = FakeProjects()
+      ..items = [
+        project(id: assignedProjectId, name: 'Garden'),
+        project(id: reassignedProjectId, name: 'Work'),
+      ];
+    await openEditor(tester, org, projects: projects);
+    await tester.pumpAndSettle();
+    await revealTap(
+      tester,
+      find.byKey(const ValueKey('editor-project-$assignedProjectId')),
+    );
+    expect(find.text('Work'), findsOneWidget);
+    expect(find.byType(ProjectSwatch), findsNWidgets(3));
+    expect(find.byIcon(projectGlyph('leaf')), findsAtLeastNWidgets(2));
+    await tester.tap(find.text('Work').last);
+    await tester.pumpAndSettle();
+    expect(org.puts, 0);
+    await revealTap(tester, find.byKey(const Key('editor-save')));
+    expect(org.lastSubmission!.draft.projectId, reassignedProjectId);
+
+    await openEditor(tester, org, projects: projects);
+    await tester.pumpAndSettle();
+    await revealTap(
+      tester,
+      find.byKey(const ValueKey('editor-project-$assignedProjectId')),
+    );
+    await tester.tap(find.text('No project').last);
+    await tester.pumpAndSettle();
+    await revealTap(tester, find.byKey(const Key('editor-save')));
+    expect(org.lastSubmission!.draft.projectId, isNull);
+  });
+  testWidgets(
+    'project-list failure keeps current project selectable and unchanged',
+    (tester) async {
+      final org = FakeOrganization()
+        ..onGet = (_) async => detail(projectId: assignedProjectId);
+      final projects = FakeProjects()
+        ..onList = () => Future.error(const HeapApiException('Offline'));
+      await openEditor(tester, org, projects: projects);
+      await tester.pumpAndSettle();
+      expect(find.text('Could not load projects.'), findsOneWidget);
+      expect(find.text('Current project'), findsOneWidget);
+      projects
+        ..onList = null
+        ..items = [project(id: assignedProjectId)];
+      await revealTap(tester, find.byKey(const Key('editor-projects-retry')));
+      expect(find.text('Garden'), findsOneWidget);
+      await revealTap(tester, find.byKey(const Key('editor-save')));
+      expect(org.lastSubmission!.draft.projectId, assignedProjectId);
+    },
+  );
   testWidgets('disposed editor ignores pending detail completion', (
     tester,
   ) async {
@@ -338,6 +424,7 @@ void main() {
       expect(find.text('Task title: My draft'), findsOneWidget);
       expect(find.text('Awaiting external dependencies: Yes'), findsOneWidget);
       expect(find.text('Awaiting external dependencies: No'), findsOneWidget);
+      expect(find.text('Project: No project'), findsNWidgets(2));
       expect(find.byKey(const Key('editor-save')), findsNothing);
     },
   );

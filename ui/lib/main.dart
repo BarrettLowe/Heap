@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import 'heap_api.dart';
@@ -9,6 +11,14 @@ import 'task_lists_page.dart';
 export 'inbox_page.dart';
 
 void main() {
+  LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks([
+      'Heap project icons (Material Design Icons)',
+    ], await rootBundle.loadString('assets/fonts/LICENSE.txt'));
+    yield LicenseEntryWithLineBreaks([
+      'Heap project icons (Apache License 2.0)',
+    ], await rootBundle.loadString('assets/fonts/APACHE-2.0.txt'));
+  });
   final baseUri = parseApiBaseUri(
     const String.fromEnvironment('HEAP_API_BASE_URL'),
   );
@@ -78,7 +88,11 @@ class _HeapAppState extends State<HeapApp> {
     ),
     home: widget.configurationError || widget.api == null
         ? const _ConfigurationPage()
-        : TaskListsPage(inbox: _controller!, organization: widget.api!),
+        : TaskListsPage(
+            inbox: _controller!,
+            organization: widget.api!,
+            projects: widget.api!,
+          ),
   );
 }
 

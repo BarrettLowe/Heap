@@ -6,6 +6,7 @@ import 'package:heap_app/heap_api.dart';
 import 'package:heap_app/inbox_controller.dart';
 import 'package:heap_app/task_lists_page.dart';
 
+import 'project_fakes.dart';
 import 'task_flow_fakes.dart';
 
 Future<void> captureHost(
@@ -20,7 +21,11 @@ Future<void> captureHost(
             .copyWith(textScaler: TextScaler.linear(scale)),
         child: child!,
       ),
-      home: TaskListsPage(inbox: inbox, organization: FakeOrganization()),
+      home: TaskListsPage(
+        projects: FakeProjects(),
+        inbox: inbox,
+        organization: FakeOrganization(),
+      ),
     ),
   );
   await tester.pumpAndSettle();

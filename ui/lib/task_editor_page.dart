@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'heap_api.dart';
 import 'heap_style.dart';
+import 'project.dart';
+import 'project_widgets.dart';
 import 'task_detail.dart';
 import 'task_editor_controller.dart';
 import 'task_widgets.dart';
@@ -11,11 +13,13 @@ class TaskEditorPage extends StatefulWidget {
     super.key,
     required this.id,
     required this.service,
+    required this.projects,
     required this.sourceOnHeap,
     required this.onUncertainLeave,
   });
   final String id;
   final OrganizationService service;
+  final ProjectService projects;
   final bool sourceOnHeap;
   final VoidCallback onUncertainLeave;
   @override
@@ -35,6 +39,9 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
   bool _allowPop = false;
   bool _dialogOpen = false;
   bool _titleTouched = false;
+  List<Project> _projects = const [];
+  bool _projectsLoading = false;
+  bool _projectsFailed = false;
 
   @override
   void initState() {
@@ -52,6 +59,22 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
     _controller = TaskEditorController(widget.service, widget.id)
       ..addListener(_changed);
     _controller.load();
+    _loadProjects();
+  }
+
+  Future<void> _loadProjects() async {
+    setState(() {
+      _projectsLoading = true;
+      _projectsFailed = false;
+    });
+    try {
+      final projects = await widget.projects.listProjects();
+      if (mounted) setState(() => _projects = projects);
+    } on HeapApiException {
+      if (mounted) setState(() => _projectsFailed = true);
+    } finally {
+      if (mounted) setState(() => _projectsLoading = false);
+    }
   }
 
   void _changed() {
@@ -347,6 +370,29 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
         },
       ),
       const SizedBox(height: 16),
+      _projectDropdown(draft, controller.editable),
+      if (_projectsLoading)
+        Semantics(
+          liveRegion: true,
+          child: Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Text('Loading projects…'),
+          ),
+        ),
+      if (_projectsFailed)
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 8,
+          children: [
+            const Text('Could not load projects.'),
+            TextButton(
+              key: const Key('editor-projects-retry'),
+              onPressed: _projectsLoading ? null : _loadProjects,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      const SizedBox(height: 16),
       LayoutBuilder(
         builder: (context, constraints) {
           final priority = _dropdown(
@@ -418,6 +464,63 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
     ]);
     return fields;
   }
+
+  Widget _projectDropdown(OrganizationDraft draft, bool editable) {
+    final projects = [..._projects];
+    if (draft.projectId != null &&
+        !projects.any((project) => project.id == draft.projectId)) {
+      projects.add(
+        Project(
+          id: draft.projectId!,
+          name: 'Current project',
+          description: null,
+          color: null,
+          icon: null,
+        ),
+      );
+    }
+    return DropdownButtonFormField<String>(
+      key: ValueKey('editor-project-${draft.projectId}'),
+      initialValue: draft.projectId ?? '',
+      isExpanded: true,
+      decoration: const InputDecoration(
+        labelText: 'Project',
+        border: OutlineInputBorder(),
+      ),
+      selectedItemBuilder: (context) => [
+        const Align(alignment: Alignment.centerLeft, child: Text('No project')),
+        for (final project in projects)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: _projectOption(project),
+          ),
+      ],
+      items: [
+        const DropdownMenuItem<String>(value: '', child: Text('No project')),
+        for (final project in projects)
+          DropdownMenuItem<String>(
+            value: project.id,
+            child: _projectOption(project),
+          ),
+      ],
+      onChanged: editable
+          ? (value) => _controller.edit(
+              projectId: value!.isEmpty ? null : value,
+              setProject: true,
+            )
+          : null,
+    );
+  }
+
+  Widget _projectOption(Project project) => Row(
+    children: [
+      ProjectSwatch(project.color, size: 16),
+      const SizedBox(width: 8),
+      Icon(projectGlyph(project.icon), size: 20, color: heapInk),
+      const SizedBox(width: 8),
+      Expanded(child: Text(project.name, overflow: TextOverflow.ellipsis)),
+    ],
+  );
 
   Widget _dropdown(
     String label,
@@ -543,6 +646,7 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       if (includeTitle) Text('Task title: ${draft.title}'),
+      Text('Project: ${_projectName(draft.projectId)}'),
       Text('Priority: ${priorityLabels[draft.priority] ?? 'Unset'}'),
       Text(
         'Duration: ${draft.durationMinutes == null ? 'Unknown' : '${draft.durationMinutes} min'}',
@@ -552,6 +656,14 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
       ),
     ],
   );
+
+  String _projectName(String? id) {
+    if (id == null) return 'No project';
+    for (final project in _projects) {
+      if (project.id == id) return project.name;
+    }
+    return 'Current project';
+  }
 
   Widget _actions(BuildContext context) {
     final c = _controller;

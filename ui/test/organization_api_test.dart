@@ -14,6 +14,7 @@ OrganizationSubmission command() => OrganizationSubmission(
   draft: const OrganizationDraft(
     title: '  New title  ',
     externallyBlocked: true,
+    projectId: null,
   ),
 );
 void main() {
@@ -92,6 +93,7 @@ void main() {
         'priority': null,
         'duration_minutes': null,
         'externally_blocked': true,
+        'project_id': null,
         'expected_updated_at': '2026-10-03T12:34:56.000000Z',
       });
       return http.Response(
@@ -103,17 +105,74 @@ void main() {
     expect((await api.saveOrganization(command())).externallyBlocked, true);
     client.close();
   });
+  for (final projectId in [null, assignedProjectId]) {
+    test(
+      'fresh project association $projectId is preserved in unchanged and edited PUT',
+      () async {
+        final client = MockClient((request) async {
+          if (request.method == 'GET') {
+            return http.Response(
+              jsonEncode(detailJson(projectId: projectId)),
+              200,
+            );
+          }
+          expect(request.method, 'PUT');
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(body.containsKey('project_id'), true);
+          expect(body['project_id'], projectId);
+          return http.Response(
+            jsonEncode(
+              detailJson(
+                projectId: projectId,
+                title: body['title'] as String,
+                waiting: body['externally_blocked'] as bool,
+              ),
+            ),
+            200,
+          );
+        });
+        final api = HeapApi(client: client, baseUri: Uri.parse('http://test'));
+        final original = await api.getTask(taskId);
+        expect(original.projectId, projectId);
+        final unchanged = await api.saveOrganization(
+          OrganizationSubmission(
+            original: original,
+            draft: OrganizationDraft.fromTask(original),
+          ),
+        );
+        expect(unchanged.projectId, projectId);
+        final changed = await api.saveOrganization(
+          OrganizationSubmission(
+            original: unchanged,
+            draft: OrganizationDraft(
+              title: 'Edited title',
+              externallyBlocked: true,
+              projectId: projectId,
+            ),
+          ),
+        );
+        expect(changed.projectId, projectId);
+        client.close();
+      },
+    );
+  }
   test('detail rejects missing metadata, wrong flag types and inconsistent qualification', () {
     for (final field in [
       'priority',
       'duration_minutes',
       'on_heap_since',
       'externally_blocked',
+      'project_id',
     ]) {
       final json = detailJson()..remove(field);
       expect(() => TaskDetail.fromJson(json), throwsFormatException);
     }
     for (final changes in <Map<String, Object?>>[
+      {'project_id': true},
+      {'project_id': 1},
+      {'project_id': ''},
+      {'project_id': '../project'},
+      {'project_id': 'not-a-uuid'},
       {'priority': true},
       {'priority': 1.5},
       {'priority': '2'},
@@ -150,6 +209,8 @@ void main() {
         'not JSON',
         jsonEncode(detailJson(id: '00000000-0000-0000-0000-000000000001')),
         jsonEncode({...detailJson(), 'externally_blocked': null}),
+        jsonEncode(detailJson()..remove('project_id')),
+        jsonEncode({...detailJson(), 'project_id': false}),
       ]) {
         final client = MockClient((_) async => http.Response(body, 200));
         final api = HeapApi(client: client, baseUri: Uri.parse('http://test'));

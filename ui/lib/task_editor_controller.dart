@@ -69,6 +69,8 @@ class TaskEditorController extends ChangeNotifier {
     int? priority,
     int? durationMinutes,
     bool? externallyBlocked,
+    String? projectId,
+    bool setProject = false,
     bool setPriority = false,
     bool setDuration = false,
   }) {
@@ -78,6 +80,7 @@ class TaskEditorController extends ChangeNotifier {
       priority: setPriority ? priority : draft!.priority,
       durationMinutes: setDuration ? durationMinutes : draft!.durationMinutes,
       externallyBlocked: externallyBlocked ?? draft!.externallyBlocked,
+      projectId: setProject ? projectId : draft!.projectId,
     );
     final errors = {...fieldErrors};
     if (title != null) errors.remove('title');
@@ -182,7 +185,7 @@ class TaskEditorController extends ChangeNotifier {
     error = null;
     fieldErrors = const {};
     notice = keepEdits
-        ? 'Your edits are not saved. Saving will replace the server\'s title, priority, duration, and awaiting flag with your values.'
+        ? 'Your edits are not saved. Saving will replace the server\'s title, priority, duration, awaiting flag, and project with your values.'
         : null;
     _notify();
   }

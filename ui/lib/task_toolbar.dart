@@ -8,10 +8,14 @@ class TaskToolbar extends StatelessWidget {
     super.key,
     required this.onTasks,
     required this.onCapture,
+    required this.onProjects,
+    this.projectsSelected = false,
     required this.captureFocus,
   });
   final VoidCallback onTasks;
   final VoidCallback onCapture;
+  final VoidCallback onProjects;
+  final bool projectsSelected;
   final FocusNode captureFocus;
   @override
   Widget build(BuildContext context) => DecoratedBox(
@@ -26,40 +30,19 @@ class TaskToolbar extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final tasks = MergeSemantics(
-                child: Semantics(
-                  selected: true,
-                  child: TextButton(
-                    key: const Key('tasks-toolbar'),
-                    onPressed: onTasks,
-                    style: TextButton.styleFrom(
-                      foregroundColor: heapInk,
-                      minimumSize: const Size(48, 48),
-                      padding: const EdgeInsets.all(4),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: heapHighlight,
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          child: const Icon(
-                            Icons.format_list_bulleted,
-                            size: 24,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text('Tasks', style: TextStyle(fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                ),
+              final tasks = _destination(
+                'Tasks',
+                Icons.format_list_bulleted,
+                'tasks-toolbar',
+                !projectsSelected,
+                onTasks,
+              );
+              final projects = _destination(
+                'Projects',
+                Icons.bar_chart_rounded,
+                'projects-toolbar',
+                projectsSelected,
+                onProjects,
               );
               final capture = Column(
                 mainAxisSize: MainAxisSize.min,
@@ -91,7 +74,6 @@ class TaskToolbar extends StatelessWidget {
                 ],
               );
               final today = _soon('Today', Icons.calendar_today_outlined);
-              final projects = _soon('Projects', Icons.bar_chart_rounded);
               final settings = _soon('Settings', Icons.settings);
               final twoRows =
                   constraints.maxWidth / 5 <
@@ -130,6 +112,42 @@ class TaskToolbar extends StatelessWidget {
               );
             },
           ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _destination(
+    String label,
+    IconData icon,
+    String key,
+    bool selected,
+    VoidCallback onPressed,
+  ) => MergeSemantics(
+    child: Semantics(
+      selected: selected,
+      child: TextButton(
+        key: Key(key),
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          foregroundColor: heapInk,
+          minimumSize: const Size(48, 48),
+          padding: const EdgeInsets.all(4),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: selected ? heapHighlight : null,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Icon(icon, size: 24),
+            ),
+            const SizedBox(height: 4),
+            Text(label, style: const TextStyle(fontSize: 12)),
+          ],
         ),
       ),
     ),

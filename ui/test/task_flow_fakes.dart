@@ -2,10 +2,13 @@ import 'package:heap_app/heap_api.dart';
 import 'package:heap_app/task_detail.dart';
 
 const taskId = 'd4be2fc9-49b7-46a6-9981-1f063eed03ea';
+const assignedProjectId = '00000000-0000-0000-0000-000000000001';
+const reassignedProjectId = '00000000-0000-0000-0000-000000000002';
 Map<String, Object?> detailJson({
   String id = taskId,
   String title = 'Existing task',
   String? status,
+  String? projectId,
   int? priority,
   int? duration,
   bool waiting = false,
@@ -23,6 +26,7 @@ Map<String, Object?> detailJson({
     'priority': priority,
     'duration_minutes': duration,
     'externally_blocked': waiting,
+    'project_id': projectId,
     'on_heap_since': since ?? (placement == 'on_heap' ? updated : null),
   };
 }
@@ -31,6 +35,7 @@ TaskDetail detail({
   String id = taskId,
   String title = 'Existing task',
   String? status,
+  String? projectId,
   int? priority,
   int? duration,
   bool waiting = false,
@@ -40,6 +45,7 @@ TaskDetail detail({
     id: id,
     title: title,
     status: status,
+    projectId: projectId,
     priority: priority,
     duration: duration,
     waiting: waiting,
@@ -88,6 +94,7 @@ class FakeOrganization implements OrganizationService {
         Future.value(
           detail(
             id: submission.original.id,
+            projectId: submission.draft.projectId,
             title: submission.draft.title.trim(),
             priority: submission.draft.priority,
             duration: submission.draft.durationMinutes,

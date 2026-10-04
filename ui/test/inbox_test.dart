@@ -7,10 +7,15 @@ import 'package:heap_app/inbox_controller.dart';
 import 'package:heap_app/main.dart';
 import 'package:heap_app/task_lists_page.dart';
 
+import 'project_fakes.dart';
 import 'task_flow_fakes.dart';
 
 Widget inboxHost(InboxController controller) => MaterialApp(
-  home: TaskListsPage(inbox: controller, organization: FakeOrganization()),
+  home: TaskListsPage(
+    projects: FakeProjects(),
+    inbox: controller,
+    organization: FakeOrganization(),
+  ),
 );
 Future<void> openCapture(WidgetTester tester) async {
   await tester.tap(find.byKey(const Key('open-capture')));

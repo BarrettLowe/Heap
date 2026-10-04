@@ -16,6 +16,7 @@ void main() {
     'priority': null,
     'duration_minutes': null,
     'externally_blocked': false,
+    'project_id': null,
   };
 
   test('GET uses the contract path and parses immutable inbox tasks', () async {
@@ -51,6 +52,7 @@ void main() {
             'priority',
             'duration_minutes',
             'externally_blocked',
+            'project_id',
           }.contains(key),
         );
       return http.Response(jsonEncode(captureJson), 201);

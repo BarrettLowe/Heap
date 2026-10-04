@@ -30,6 +30,65 @@ void main() {
     expect(service.puts, 1);
     c.dispose();
   });
+  for (final association in [
+    (null, assignedProjectId),
+    (assignedProjectId, null),
+    (assignedProjectId, reassignedProjectId),
+  ]) {
+    final originalProjectId = association.$1;
+    test(
+      'unknown Save cannot match reassignment from $originalProjectId to ${association.$2}',
+      () async {
+        final service = FakeOrganization();
+        service.onGet = (_) async => detail(projectId: originalProjectId);
+        service.onSave = (_) => throw unknown;
+        final c = TaskEditorController(service, taskId);
+        await c.load();
+        c.edit(title: 'My edits');
+        await c.save();
+        service.onGet = (_) async =>
+            detail(title: 'My edits', projectId: association.$2);
+        await c.reconcile();
+        expect(c.matching, isNull);
+        expect(c.uncertain, true);
+        expect(c.needsChoice, true);
+        expect(service.puts, 1);
+        service.onGet = (_) async =>
+            detail(title: 'My edits', projectId: originalProjectId);
+        await c.reconcile();
+        expect(c.matching!.projectId, originalProjectId);
+        expect(c.uncertain, false);
+        expect(service.puts, 1);
+        c.dispose();
+      },
+    );
+  }
+  test('deliberate retry keeps edits and preserves association from fresh comparison', () async {
+    final service = FakeOrganization();
+    service.onGet = (_) async => detail(projectId: assignedProjectId);
+    service.onSave = (_) => throw unknown;
+    final c = TaskEditorController(service, taskId);
+    await c.load();
+    c.edit(title: 'My edits');
+    await c.save();
+    service.onGet = (_) async => detail(
+      title: 'Remote',
+      projectId: reassignedProjectId,
+      updated: '2026-10-04T12:34:56.000000Z',
+    );
+    await c.reconcile();
+    c.chooseVersion(keepEdits: true);
+    service.onSave = null;
+    final saved = await c.save();
+    expect(saved!.title, 'My edits');
+    expect(saved.projectId, assignedProjectId);
+    expect(service.lastSubmission!.toJson()['project_id'], assignedProjectId);
+    expect(
+      service.lastSubmission!.toJson()['expected_updated_at'],
+      '2026-10-04T12:34:56.000000Z',
+    );
+    c.dispose();
+  });
   test('Use saved version adopts all 4 fields but does not prove an uncertain prior write failed', () async {
     final service = FakeOrganization()..onSave = (_) => throw unknown;
     final c = TaskEditorController(service, taskId);
@@ -49,6 +108,23 @@ void main() {
     expect(service.puts, 1);
     c.dispose();
   });
+  test('project reassignment and clearing are dirty and submitted', () async {
+    final service = FakeOrganization()
+      ..onGet = (_) async => detail(projectId: assignedProjectId);
+    final c = TaskEditorController(service, taskId);
+    await c.load();
+    c.edit(projectId: reassignedProjectId, setProject: true);
+    expect(c.dirty, true);
+    expect(service.puts, 0);
+    expect((await c.save())!.projectId, reassignedProjectId);
+    expect(service.lastSubmission!.toJson()['project_id'], reassignedProjectId);
+    c.edit(projectId: null, setProject: true);
+    expect(c.dirty, true);
+    expect((await c.save())!.projectId, isNull);
+    expect(service.lastSubmission!.toJson()['project_id'], isNull);
+    c.dispose();
+  });
+
   test('waiting-only draft is dirty; atomic Save stays organized independently of waiting', () async {
     final service = FakeOrganization()
       ..onGet = (_) async => detail(priority: 2, duration: 30);
@@ -92,6 +168,7 @@ void main() {
     expect(c.saved!.status, 'on_heap');
     expect(c.saved!.updatedAtToken, '2026-10-04T12:34:56.000000Z');
     expect(c.notice, contains('awaiting flag'));
+    expect(c.notice, contains('project'));
     expect(service.puts, 1);
     c.dispose();
   });
