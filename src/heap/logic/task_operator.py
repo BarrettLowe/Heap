@@ -1,5 +1,5 @@
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from heap.logic.duration import Duration
@@ -71,6 +71,44 @@ class TaskOperator:
         now = current_time()
         task.status = TaskStatus.COMPLETED
         task.completed_at = now
+        task.updated_at = now
+        self._store.save(task)
+        return task
+
+    def complete_on_heap(self, task_id: UUID) -> Task:
+        """Complete a task currently on Heap, retaining its age for undo.
+
+        Missing IDs raise KeyError; tasks without Heap placement raise ValueError.
+        """
+        task = self.get(task_id)
+        if task.status is TaskStatus.COMPLETED:
+            return task
+        if task.status is not TaskStatus.ON_HEAP or task.on_heap_since is None:
+            raise ValueError("Only a task on Heap can be completed")
+        now = current_time()
+        task.status = TaskStatus.COMPLETED
+        task.completed_at = now
+        task.updated_at = max(now, task.updated_at + timedelta(microseconds=1))
+        self._store.save(task)
+        return task
+
+    def undo_completion(self, task_id: UUID) -> Task:
+        """Restore a completed task to its retained qualifying Heap placement.
+
+        Missing IDs raise KeyError; tasks without saved Heap history raise ValueError.
+        """
+        task = self.get(task_id)
+        if task.status is not TaskStatus.COMPLETED:
+            return task
+        if (
+            task.on_heap_since is None
+            or task.priority is None
+            or task.duration is Duration.UNKNOWN
+        ):
+            raise ValueError("Completed task has no qualifying Heap history")
+        now = max(current_time(), task.updated_at + timedelta(microseconds=1))
+        task.status = TaskStatus.ON_HEAP
+        task.completed_at = None
         task.updated_at = now
         self._store.save(task)
         return task

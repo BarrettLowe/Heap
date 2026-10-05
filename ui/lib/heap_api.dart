@@ -39,6 +39,10 @@ abstract interface class OrganizationService {
   Future<TaskDetail> getTask(String id);
   Future<List<TaskDetail>> listOnHeap();
   Future<TaskDetail> saveOrganization(OrganizationSubmission submission);
+  Future<TaskDetail> setCompletion(
+    TaskDetail original, {
+    required bool completed,
+  });
 }
 
 abstract interface class ProjectService {
@@ -205,6 +209,59 @@ class HeapApi implements InboxService, OrganizationService, ProjectService {
       throw _unknownSave;
     }
   }
+
+  @override
+  Future<TaskDetail> setCompletion(
+    TaskDetail original, {
+    required bool completed,
+  }) async {
+    final expectedStatus = completed ? 'completed' : 'on_heap';
+    if (original.status != (completed ? 'on_heap' : 'completed') ||
+        original.onHeapSince == null) {
+      throw const HeapApiException(
+        'The task cannot be completed in its current state.',
+      );
+    }
+    try {
+      final response = await client
+          .put(
+            baseUri.resolve('/api/v1/tasks/${original.id}/completion'),
+            headers: const {'content-type': 'application/json'},
+            body: jsonEncode({
+              'completed': completed,
+              'expected_updated_at': original.updatedAtToken,
+            }),
+          )
+          .timeout(timeout);
+      if (response.statusCode >= 500 ||
+          (response.statusCode < 400 && response.statusCode != 200)) {
+        throw _unknownCompletion;
+      }
+      if (response.statusCode != 200) throw _organizationError(response);
+      final detail = TaskDetail.fromJson(jsonDecode(response.body));
+      if (detail.id != original.id ||
+          detail.status != expectedStatus ||
+          detail.title != original.title ||
+          detail.createdAt != original.createdAt ||
+          detail.priority != original.priority ||
+          detail.durationMinutes != original.durationMinutes ||
+          detail.externallyBlocked != original.externallyBlocked ||
+          detail.onHeapSince != original.onHeapSince ||
+          detail.projectId != original.projectId) {
+        throw const FormatException('Invalid completion response.');
+      }
+      return detail;
+    } on HeapApiException {
+      rethrow;
+    } catch (_) {
+      throw _unknownCompletion;
+    }
+  }
+
+  static const _unknownCompletion = HeapApiException(
+    'Completion may have succeeded. Refresh the On-deck list before trying again.',
+    unknownOutcome: true,
+  );
 
   @override
   Future<List<Project>> listProjects() async {

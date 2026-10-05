@@ -78,6 +78,9 @@ class FakeOrganization implements OrganizationService {
   int lists = 0;
   Future<TaskDetail> Function(String)? onGet;
   Future<TaskDetail> Function(OrganizationSubmission)? onSave;
+  Future<TaskDetail> Function(TaskDetail, {required bool completed})?
+  onCompletion;
+  int completionWrites = 0;
   Future<List<TaskDetail>> Function()? onList;
   OrganizationSubmission? lastSubmission;
   @override
@@ -101,6 +104,29 @@ class FakeOrganization implements OrganizationService {
             waiting: submission.draft.externallyBlocked,
             status: submission.expectedStatus,
           ),
+        );
+  }
+
+  @override
+  Future<TaskDetail> setCompletion(
+    TaskDetail original, {
+    required bool completed,
+  }) {
+    completionWrites++;
+    return onCompletion?.call(original, completed: completed) ??
+        Future.value(
+          TaskDetail.fromJson({
+            'id': original.id,
+            'title': original.title,
+            'status': completed ? 'completed' : 'on_heap',
+            'created_at': formatUtcTimestamp(original.createdAt),
+            'updated_at': '2026-10-04T12:34:56.123456Z',
+            'priority': original.priority,
+            'duration_minutes': original.durationMinutes,
+            'externally_blocked': original.externallyBlocked,
+            'project_id': original.projectId,
+            'on_heap_since': formatUtcTimestamp(original.onHeapSince!),
+          }),
         );
   }
 

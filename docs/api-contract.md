@@ -4,6 +4,10 @@
 
 Python owns rules and durable storage. Flutter is server-backed: no disk task cache, queued writes, automatic write retries, or offline synchronization. Contract changes remain coordinator-owned.
 
+## Heap completion addition
+
+The current completion route and naming are documented in [task-completion-plan.md](task-completion-plan.md): `PUT /api/v1/tasks/{task_id}/completion` sets or undoes completion with a comparison token. This is an explicit exception to the older terminal-completion policy below: organization still rejects completed tasks, but completion undo can restore a qualifying Heap task with its original age. Current code uses `on_heap`, `on_heap_since`, and `/api/v1/heap` rather than the historical On-deck transport names in this document.
+
 ## Routes
 
 Use these exact paths without trailing slashes. JSON uses UTF-8. There are no credentials or idempotency keys in this slice.

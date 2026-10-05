@@ -20,16 +20,19 @@ const priorityColors = <int, (Color, Color, Color)>{
 const unsetColors = (Color(0xFFEBEEEA), Color(0xFF4B554E), Color(0xFFA3AAA4));
 
 class PriorityPill extends StatelessWidget {
-  const PriorityPill({super.key, required this.priority});
+  const PriorityPill({super.key, required this.priority, this.neutral = false});
   final int? priority;
+  final bool neutral;
   @override
   Widget build(BuildContext context) {
     final colors = priorityColors[priority] ?? unsetColors;
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
       constraints: const BoxConstraints(minHeight: 28),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: colors.$1,
+        // Retained completed rows use a readable neutral fill.
+        color: neutral ? const Color(0xFFE5E8E5) : colors.$1,
         borderRadius: BorderRadius.circular(24),
       ),
       child: Text(
@@ -37,7 +40,7 @@ class PriorityPill extends StatelessWidget {
         style: TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w600,
-          color: colors.$2,
+          color: neutral ? const Color(0xFF3F4742) : colors.$2,
         ),
       ),
     );

@@ -346,3 +346,24 @@ unverified. Designer approved the other represented picker states, including the
 readable 2-column Android 320/2.0 icon browser as an acceptable design deviation.
 Sol Designer approved the final selected-hue and None screenshots, including
 Android 320/2.0 text, with no blocking visual findings.
+
+## 23. Heap row completion
+
+Barrett approved a left circular completion button, grey retained completed rows,
+undo preserving task details and original Heap age, and removal on any successful
+Heap list reload. Plan: `docs/task-completion-plan.md`; presentation:
+`docs/task-completion-design.md`.
+
+- [x] Implement and test completion/undo API with stale-token protection and persistence.
+- [x] Implement and test separate row control, neutral completed styling, retention, undo, and reload.
+- [x] Complete independent review of the final fixes.
+- [x] Coordinator: run Python/Flutter checks and web/Android debug builds.
+- [ ] Verify actual web, emulator, and physical-phone completion/undo/reload and visual appearance.
+
+Coordinator verification: 308 Python tests and 174 Flutter tests passed;
+Flutter analysis, web build, Android debug APK build, and whitespace checks passed.
+Independent review approved the final fixes for screen-reader activation,
+refresh-during-undo, uncertain-write recovery, comparison-token advancement, and
+neutral-pill styling. Reviewer verified 11 API tests, 174 Flutter tests, and 4
+independent probes; Luna also verified the final implementation. No device was connected during these checks. No deployment or commit
+was performed by this completion step.

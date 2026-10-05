@@ -95,6 +95,29 @@ class ProjectUpdateRequest(ProjectCreateRequest):
     description: StrictStr | None
 
 
+class CompletionRequest(BaseModel):
+    """Validate a desired task completion state and its comparison token."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    completed: StrictBool
+    expected_updated_at: StrictStr
+
+    @field_validator("expected_updated_at")
+    @classmethod
+    def validate_expected_updated_at(cls, value: str) -> str:
+        """Require the canonical UTC timestamp format used by task responses."""
+        try:
+            parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%S.%fZ").replace(
+                tzinfo=UTC
+            )
+        except ValueError as error:
+            raise ValueError("Must be a canonical UTC timestamp.") from error
+        if _format_timestamp(parsed) != value:
+            raise ValueError("Must be a canonical UTC timestamp.")
+        return value
+
+
 class OrganizationRequest(BaseModel):
     """Validate a complete task-organization replacement request."""
 
@@ -579,6 +602,54 @@ def create_app(
                 )
             except KeyError:
                 return _error_response(404, "not_found", "Not found.")
+        return _serialize_task_detail(task)
+
+    @application.put("/api/v1/tasks/{task_id}/completion", response_model=None)
+    async def update_task_completion(
+        request: Request, task_id: str
+    ) -> JSONResponse | dict[str, str | int | bool | None]:
+        """Set completion for a saved Heap task using an optimistic token."""
+        parsed_id = _parse_task_id(task_id)
+        if parsed_id is None:
+            return _error_response(
+                422,
+                "invalid_request",
+                "Request validation failed.",
+                [{"field": "task_id", "message": "Must be a UUID."}],
+            )
+        body, body_error = await _read_json_body(request)
+        if body_error is not None:
+            return body_error
+        try:
+            payload = CompletionRequest.model_validate(body)
+        except ValidationError as error:
+            return _validation_error_response(error)
+
+        with request.app.state.operation_lock:
+            try:
+                current = request.app.state.tasks.get(parsed_id)
+            except KeyError:
+                return _error_response(404, "not_found", "Not found.")
+            if _format_timestamp(current.updated_at) != payload.expected_updated_at:
+                return _error_response(
+                    409, "task_conflict", "Task changed since it was loaded."
+                )
+            try:
+                if payload.completed:
+                    if current.status is TaskStatus.COMPLETED:
+                        task = current
+                    else:
+                        task = request.app.state.tasks.complete_on_heap(parsed_id)
+                elif current.status is TaskStatus.COMPLETED:
+                    task = request.app.state.tasks.undo_completion(parsed_id)
+                else:
+                    task = current
+            except ValueError:
+                return _error_response(
+                    409,
+                    "task_not_on_heap",
+                    "Task has no qualifying Heap history to complete or restore.",
+                )
         return _serialize_task_detail(task)
 
     @application.post("/api/v1/tasks", status_code=201, response_model=None)
