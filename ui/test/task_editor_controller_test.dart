@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:heap_app/calendar_date.dart';
 import 'package:heap_app/heap_api.dart';
 import 'package:heap_app/task_detail.dart';
 import 'package:heap_app/task_editor_controller.dart';
@@ -426,4 +427,122 @@ void main() {
       }
     },
   );
+  test('due-date edits are dirty, same-date edits are not, and unrelated edits preserve date', () async {
+    final service = FakeOrganization()
+      ..onGet = (_) async =>
+          TaskDetail.fromJson(detailJson(dueDate: '2026-10-05'));
+    final c = TaskEditorController(service, taskId);
+    await c.load();
+    c.edit(dueDate: CalendarDate(2026, 10, 5), setDueDate: true);
+    expect(c.dirty, false);
+    c.edit(dueDate: CalendarDate(2026, 10, 6), setDueDate: true);
+    expect(c.dirty, true);
+    c.edit(title: 'Changed');
+    expect(c.draft!.dueDate, CalendarDate(2026, 10, 6));
+    c.dispose();
+  });
+
+  test(
+    'clear date rejection is exposed and cleared by changing the date',
+    () async {
+      final service = FakeOrganization()
+        ..onGet = (_) async =>
+            TaskDetail.fromJson(detailJson(dueDate: '2026-10-05'));
+      service.onSave = (_) async => throw const HeapApiException(
+        'Rejected',
+        statusCode: 422,
+        code: 'invalid_request',
+        fieldErrors: {'due_date': 'Invalid date'},
+      );
+      final c = TaskEditorController(service, taskId);
+      await c.load();
+      c.edit(dueDate: null, setDueDate: true);
+      expect(c.dirty, true);
+      expect(await c.save(), isNull);
+      expect(service.lastSubmission!.toJson()['due_date'], isNull);
+      expect(c.fieldErrors['due_date'], 'Invalid date');
+      c.edit(dueDate: CalendarDate(2026, 10, 7), setDueDate: true);
+      expect(c.fieldErrors, isEmpty);
+      c.dispose();
+    },
+  );
+
+  test('conflict keep-edits preserves due date and warning names it', () async {
+    final service = FakeOrganization()
+      ..onSave = (_) => throw const HeapApiException(
+        'Conflict',
+        statusCode: 409,
+        code: 'task_conflict',
+      );
+    final c = TaskEditorController(service, taskId);
+    await c.load();
+    final date = CalendarDate(2026, 10, 6);
+    c.edit(dueDate: date, setDueDate: true);
+    await c.save();
+    service.onGet = (_) async =>
+        TaskDetail.fromJson(detailJson(dueDate: '2026-10-07'));
+    await c.reconcile();
+    c.chooseVersion(keepEdits: true);
+    expect(c.draft!.dueDate, date);
+    expect(c.notice, contains('due date'));
+    c.dispose();
+  });
+
+  test('uncertain save only matches when fetched due date agrees', () async {
+    final service = FakeOrganization()..onSave = (_) => throw unknown;
+    final c = TaskEditorController(service, taskId);
+    await c.load();
+    final date = CalendarDate(2026, 10, 6);
+    c.edit(dueDate: date, setDueDate: true);
+    await c.save();
+    service.onGet = (_) async =>
+        TaskDetail.fromJson(detailJson(dueDate: '2026-10-07'));
+    await c.reconcile();
+    expect(c.matching, isNull);
+    expect(c.uncertain, true);
+    service.onGet = (_) async =>
+        TaskDetail.fromJson(detailJson(dueDate: '2026-10-06'));
+    await c.reconcile();
+    expect(c.matching!.dueDate, date);
+    c.dispose();
+  });
+  test('use-saved conflict choice adopts fetched due date', () async {
+    final service = FakeOrganization()
+      ..onSave = (_) => throw const HeapApiException(
+        'Conflict',
+        statusCode: 409,
+        code: 'task_conflict',
+      );
+    final c = TaskEditorController(service, taskId);
+    await c.load();
+    c.edit(dueDate: CalendarDate(2026, 10, 6), setDueDate: true);
+    await c.save();
+    service.onGet = (_) async =>
+        TaskDetail.fromJson(detailJson(dueDate: '2026-10-07'));
+    await c.reconcile();
+    c.chooseVersion(keepEdits: false);
+    expect(c.draft!.dueDate, CalendarDate(2026, 10, 7));
+    expect(c.dirty, false);
+    c.dispose();
+  });
+
+  test('date edits and clears are ignored during pending save and result replaces draft', () async {
+    final service = FakeOrganization();
+    final pending = Completer<TaskDetail>();
+    service.onSave = (_) => pending.future;
+    final c = TaskEditorController(service, taskId);
+    await c.load();
+    final submittedDate = CalendarDate(2026, 10, 6);
+    c.edit(dueDate: submittedDate, setDueDate: true);
+    final save = c.save();
+    c.edit(dueDate: CalendarDate(2026, 10, 7), setDueDate: true);
+    c.edit(dueDate: null, setDueDate: true);
+    expect(c.draft!.dueDate, submittedDate);
+    pending.complete(TaskDetail.fromJson(detailJson(dueDate: '2026-10-06')));
+    await save;
+    expect(c.saved!.dueDate, submittedDate);
+    expect(c.draft!.dueDate, submittedDate);
+    expect(c.dirty, false);
+    c.dispose();
+  });
 }

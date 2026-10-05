@@ -346,3 +346,84 @@ unverified. Designer approved the other represented picker states, including the
 readable 2-column Android 320/2.0 icon browser as an acceptable design deviation.
 Sol Designer approved the final selected-hue and None screenshots, including
 Android 320/2.0 text, with no blocking visual findings.
+
+## 22. Phone beta deployment
+
+- [x] Build a release APK targeting `https://heap.lowehomeautomation.xyz`.
+- [x] Install and launch on Barrett's physical phone.
+- [x] Verify the phone connects to the hosted backend.
+
+Release build succeeded at `ui/build/app/outputs/flutter-apk/app-release.apk`.
+After USB permissions and debugging authorization were resolved, installation
+and launch succeeded on Barrett's Pixel 6 Pro. A phone screenshot confirmed the
+Inbox screen with a server-unreachable error. The HTTPS health check now fails
+certificate-chain verification (`unable to get local issuer certificate`);
+backend connectivity is not yet verified. Existing Android signing is unchanged.
+
+A diagnostic release logs the underlying Inbox exception without changing UI
+messages or certificate verification. Independent review approved; coordinator
+passed analysis and all 157 Flutter tests, rebuilt and installed on the phone.
+Phone logs confirm `HandshakeException: CERTIFICATE_VERIFY_FAILED: unable to get
+local issuer certificate`. Barrett verified Chrome on the phone opens `/healthz`
+with `status: ok` and no certificate warning; app certificate trust blocked HTTPS.
+
+Barrett chose HTTP for the trusted private-network beta and manages Caddy.
+Release Android network security configuration permits cleartext only for
+`heap.lowehomeautomation.xyz` (no subdomains), with a debug-only override retaining
+local HTTP development. Rebuilt and installed using
+`HEAP_API_BASE_URL=http://heap.lowehomeautomation.xyz`. Coordinator verified HTTP
+`/healthz` returns 200 and the Pixel 6 Pro loads the confirmed empty Inbox with no
+connection error; Barrett also confirmed the error disappeared. Independent review
+approved the Android configuration, but noted Dart HTTP may not enforce its domain
+restrictions; the policy is not a guaranteed Dart-level network boundary.
+Capture/edit and broader physical-phone UI checks remain unverified.
+
+## 23. Heap row completion
+
+Barrett approved a left circular completion button, grey retained completed rows,
+undo preserving task details and original Heap age, and removal on any successful
+Heap list reload. Plan: `docs/task-completion-plan.md`; presentation:
+`docs/task-completion-design.md`.
+
+- [x] Implement and test completion/undo API with stale-token protection and persistence.
+- [x] Implement and test separate row control, neutral completed styling, retention, undo, and reload.
+- [x] Complete independent review of the final fixes.
+- [x] Coordinator: run Python/Flutter checks and web/Android debug builds.
+- [ ] Verify actual web, emulator, and physical-phone completion/undo/reload and visual appearance.
+
+Coordinator verification: 308 Python tests and 174 Flutter tests passed;
+Flutter analysis, web build, Android debug APK build, and whitespace checks passed.
+Independent review approved the final fixes for screen-reader activation,
+refresh-during-undo, uncertain-write recovery, comparison-token advancement, and
+neutral-pill styling. Reviewer verified 11 API tests, 174 Flutter tests, and 4
+independent probes; Luna also verified the final implementation. No device was connected during these checks. No deployment or commit
+was performed by this completion step.
+
+## 24. Priority/date Heap ranking
+
+Approved contract and implementation details: `docs/heap-ranking-plan.md`,
+`docs/api-contract.md`, and `docs/heap-ranking-fixture.json`. Backend and client
+contract changes (required `local_date` and `due_date`) must be rolled out together.
+
+- [x] Freeze contract, API examples, and shared ordering fixture (step 0).
+- [x] B1–B5: backend storage, atomic date organization, Python ranking, HTTP contract, and ranked Heap endpoint.
+- [x] F1–F7: Flutter date models/transport/editor, server-order preservation, due-date rows, and safe local-date resume.
+- [x] D1: Designer handoff and final visual approval.
+- [x] V1: coordinator ran 343 Python tests, 208 Flutter tests, clean analysis, web/debug APK builds, and whitespace checks. Backend independent review approved (39 probes; tests strengthened); Frontend review #23 approved (208 tests, 21 editor tests, 17 scratch probes).
+- [x] V1 live integration: isolated HTTP/API ordering, P1 protection, deadline promotion, stale 409, completion/undo, restart snapshot preservation; Firefox/emulator picker-save-rerank, grey completion and undo/reload. Firefox failed-refresh recovery retained grey rows with an accessible stale warning and removed them after recovery. Isolated services and test state were closed/reset.
+- [x] V2 Firefox and Android emulator verification, including timezone change/resume from America/New_York Oct 5 to Pacific/Kiritimati Oct 6 and restored timezone.
+- [x] V2 screenshots at 320 logical pixels/2× and Designer final approval for standard web, Android, and narrow/large-text rows, editor, and picker.
+- [ ] V2 physical-phone verification (phone unavailable).
+- [ ] V2 live full-keyboard and screen-reader verification.
+
+Implementation and V1 are complete. V2 remains partial only for the listed device/accessibility checks. No production deployment, commit, or push. Existing beta edits were preserved.
+
+## 25. Project icon search keyboard fix
+
+- [x] Remove Android keyboard suppression from Browse all search and verify automatic opening and reopening after dismissal in a regression test.
+- [x] Run Flutter analysis and the full widget suite: no issues; 208 tests passed.
+- [ ] Verify keyboard behavior on a physical phone and emulator with the updated app.
+
+The regression failed before the fix. Search now uses Flutter's normal text
+input instead of switching from `TextInputType.none` and manually showing the
+keyboard. No device is connected; no APK deployment was performed.

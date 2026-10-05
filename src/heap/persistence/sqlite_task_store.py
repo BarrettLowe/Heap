@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from types import TracebackType
 from uuid import UUID
@@ -46,6 +46,7 @@ class SQLiteTaskStore(TaskStore):
             ("project_id", "TEXT"),
             ("on_deck_since", "TEXT"),
             ("completed_at", "TEXT"),
+            ("due_date", "TEXT"),
             (
                 "externally_blocked",
                 "INTEGER NOT NULL DEFAULT 0 CHECK (externally_blocked IN (0, 1))",
@@ -87,8 +88,8 @@ class SQLiteTaskStore(TaskStore):
                 INSERT INTO tasks
                     (id, title, status, created_at, updated_at,
                      priority, duration_minutes, project_id, on_deck_since, completed_at,
-                     externally_blocked)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     externally_blocked, due_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     title = excluded.title,
                     status = excluded.status,
@@ -99,7 +100,8 @@ class SQLiteTaskStore(TaskStore):
                     project_id = excluded.project_id,
                     on_deck_since = excluded.on_deck_since,
                     completed_at = excluded.completed_at,
-                    externally_blocked = excluded.externally_blocked
+                    externally_blocked = excluded.externally_blocked,
+                    due_date = excluded.due_date
                 """,
                 [
                     (
@@ -116,6 +118,7 @@ class SQLiteTaskStore(TaskStore):
                         task.on_heap_since.isoformat() if task.on_heap_since else None,
                         task.completed_at.isoformat() if task.completed_at else None,
                         task.externally_blocked,
+                        task.due_date.isoformat() if task.due_date else None,
                     )
                     for task in tasks
                 ],
@@ -214,7 +217,7 @@ class SQLiteTaskStore(TaskStore):
             """
             SELECT id, title, status, created_at, updated_at,
                    priority, duration_minutes, project_id, on_deck_since, completed_at,
-                   externally_blocked
+                   externally_blocked, due_date
             FROM tasks WHERE id = ?
             """,
             (str(task_id),),
@@ -229,7 +232,7 @@ class SQLiteTaskStore(TaskStore):
             """
             SELECT id, title, status, created_at, updated_at,
                    priority, duration_minutes, project_id, on_deck_since, completed_at,
-                   externally_blocked
+                   externally_blocked, due_date
             FROM tasks WHERE status != ? ORDER BY id
             """,
             (TaskStatus.COMPLETED.value,),
@@ -242,7 +245,7 @@ class SQLiteTaskStore(TaskStore):
             """
             SELECT id, title, status, created_at, updated_at,
                    priority, duration_minutes, project_id, on_deck_since, completed_at,
-                   externally_blocked
+                   externally_blocked, due_date
             FROM tasks
             WHERE status != ? AND (priority IS NULL OR duration_minutes IS NULL)
             ORDER BY created_at, id
@@ -257,7 +260,7 @@ class SQLiteTaskStore(TaskStore):
             """
             SELECT id, title, status, created_at, updated_at,
                    priority, duration_minutes, project_id, on_deck_since, completed_at,
-                   externally_blocked
+                   externally_blocked, due_date
             FROM tasks
             WHERE status != ? AND priority IS NOT NULL AND duration_minutes IS NOT NULL
             ORDER BY on_deck_since, id
@@ -272,7 +275,7 @@ class SQLiteTaskStore(TaskStore):
             """
             SELECT id, title, status, created_at, updated_at,
                    priority, duration_minutes, project_id, on_deck_since, completed_at,
-                   externally_blocked
+                   externally_blocked, due_date
             FROM tasks WHERE project_id = ? ORDER BY created_at, id
             """,
             (str(project_id),),
@@ -293,6 +296,7 @@ class SQLiteTaskStore(TaskStore):
             str | None,
             str | None,
             int,
+            str | None,
         ],
     ) -> Task:
         """Load a snapshot, translating the historical status into heap vocabulary."""
@@ -308,6 +312,7 @@ class SQLiteTaskStore(TaskStore):
             on_heap_since=datetime.fromisoformat(row[8]) if row[8] else None,
             completed_at=datetime.fromisoformat(row[9]) if row[9] else None,
             externally_blocked=bool(row[10]),
+            due_date=date.fromisoformat(row[11]) if row[11] is not None else None,
         )
 
     def close(self) -> None:

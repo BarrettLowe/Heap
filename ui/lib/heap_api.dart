@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import 'calendar_date.dart';
 import 'inbox_task.dart';
 import 'task_detail.dart';
 import 'project.dart';
@@ -37,8 +39,12 @@ abstract interface class InboxService {
 
 abstract interface class OrganizationService {
   Future<TaskDetail> getTask(String id);
-  Future<List<TaskDetail>> listOnHeap();
+  Future<List<TaskDetail>> listOnHeap({required String localDate});
   Future<TaskDetail> saveOrganization(OrganizationSubmission submission);
+  Future<TaskDetail> setCompletion(
+    TaskDetail original, {
+    required bool completed,
+  });
 }
 
 abstract interface class ProjectService {
@@ -85,7 +91,8 @@ class HeapApi implements InboxService, OrganizationService, ProjectService {
       throw const HeapApiException('The server took too long to respond.');
     } on FormatException {
       throw const HeapApiException('The server returned an invalid response.');
-    } catch (_) {
+    } catch (error) {
+      debugPrint('HeapApi.listInbox failed: $error');
       throw const HeapApiException('Could not reach the server.');
     }
   }
@@ -145,8 +152,15 @@ class HeapApi implements InboxService, OrganizationService, ProjectService {
   }
 
   @override
-  Future<List<TaskDetail>> listOnHeap() async {
-    final response = await _organizationRead('/api/v1/heap');
+  Future<List<TaskDetail>> listOnHeap({required String localDate}) async {
+    final canonicalDate = CalendarDate.parse(localDate).toString();
+    if (canonicalDate != localDate) {
+      throw const FormatException('Invalid canonical local date.');
+    }
+    final uri = baseUri
+        .resolve('/api/v1/heap')
+        .replace(queryParameters: {'local_date': canonicalDate});
+    final response = await _organizationReadUri(uri);
     try {
       final body = jsonDecode(response.body);
       if (body is! Map<String, dynamic> || body['items'] is! List) {
@@ -163,9 +177,12 @@ class HeapApi implements InboxService, OrganizationService, ProjectService {
     }
   }
 
-  Future<http.Response> _organizationRead(String path) async {
+  Future<http.Response> _organizationRead(String path) =>
+      _organizationReadUri(baseUri.resolve(path));
+
+  Future<http.Response> _organizationReadUri(Uri uri) async {
     try {
-      final response = await client.get(baseUri.resolve(path)).timeout(timeout);
+      final response = await client.get(uri).timeout(timeout);
       if (response.statusCode != 200) throw _organizationError(response);
       return response;
     } on HeapApiException {
@@ -205,6 +222,60 @@ class HeapApi implements InboxService, OrganizationService, ProjectService {
       throw _unknownSave;
     }
   }
+
+  @override
+  Future<TaskDetail> setCompletion(
+    TaskDetail original, {
+    required bool completed,
+  }) async {
+    final expectedStatus = completed ? 'completed' : 'on_heap';
+    if (original.status != (completed ? 'on_heap' : 'completed') ||
+        original.onHeapSince == null) {
+      throw const HeapApiException(
+        'The task cannot be completed in its current state.',
+      );
+    }
+    try {
+      final response = await client
+          .put(
+            baseUri.resolve('/api/v1/tasks/${original.id}/completion'),
+            headers: const {'content-type': 'application/json'},
+            body: jsonEncode({
+              'completed': completed,
+              'expected_updated_at': original.updatedAtToken,
+            }),
+          )
+          .timeout(timeout);
+      if (response.statusCode >= 500 ||
+          (response.statusCode < 400 && response.statusCode != 200)) {
+        throw _unknownCompletion;
+      }
+      if (response.statusCode != 200) throw _organizationError(response);
+      final detail = TaskDetail.fromJson(jsonDecode(response.body));
+      if (detail.id != original.id ||
+          detail.status != expectedStatus ||
+          detail.title != original.title ||
+          detail.createdAt != original.createdAt ||
+          detail.priority != original.priority ||
+          detail.durationMinutes != original.durationMinutes ||
+          detail.externallyBlocked != original.externallyBlocked ||
+          detail.onHeapSince != original.onHeapSince ||
+          detail.projectId != original.projectId ||
+          detail.dueDate != original.dueDate) {
+        throw const FormatException('Invalid completion response.');
+      }
+      return detail;
+    } on HeapApiException {
+      rethrow;
+    } catch (_) {
+      throw _unknownCompletion;
+    }
+  }
+
+  static const _unknownCompletion = HeapApiException(
+    'Completion may have succeeded. Refresh the On-deck list before trying again.',
+    unknownOutcome: true,
+  );
 
   @override
   Future<List<Project>> listProjects() async {
@@ -322,6 +393,7 @@ class HeapApi implements InboxService, OrganizationService, ProjectService {
                   'priority',
                   'duration_minutes',
                   'externally_blocked',
+                  'due_date',
                 }.contains(field['field']) &&
                 field['message'] is String) {
               fields[field['field'] as String] = field['message'] as String;

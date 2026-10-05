@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'calendar_date.dart';
+
 import 'capture_sheet.dart';
 import 'heap_api.dart';
 import 'heap_filter.dart';
@@ -23,15 +25,18 @@ class TaskListsPage extends StatefulWidget {
     required this.inbox,
     required this.organization,
     required this.projects,
+    this.clock,
   });
   final InboxController inbox;
   final OrganizationService organization;
   final ProjectService projects;
+  final DateTime Function()? clock;
   @override
   State<TaskListsPage> createState() => _TaskListsPageState();
 }
 
-class _TaskListsPageState extends State<TaskListsPage> {
+class _TaskListsPageState extends State<TaskListsPage>
+    with WidgetsBindingObserver {
   late final OnHeapController _heap;
   late final ProjectsController _projects;
   bool _showProjects = false;
@@ -49,6 +54,8 @@ class _TaskListsPageState extends State<TaskListsPage> {
   HeapFilter _filter = const HeapFilter.none();
   bool _editing = false;
   bool _captureOpen = false;
+  bool _resumeRefreshDeferred = false;
+  bool _resumeRefreshWaitingForLoad = false;
   bool _refreshingLists = false;
   int _listRefreshVersion = 0;
   int _interactionEpoch = 0;
@@ -72,13 +79,17 @@ class _TaskListsPageState extends State<TaskListsPage> {
   @override
   void initState() {
     super.initState();
-    _heap = OnHeapController(widget.organization);
+    _heap = OnHeapController(widget.organization, clock: widget.clock);
+    _heap.addListener(_heapChanged);
+    WidgetsBinding.instance.addObserver(this);
     _projects = ProjectsController(widget.projects);
     widget.inbox.load();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _heap.removeListener(_heapChanged);
     _heap.dispose();
     _projects.dispose();
     _projectsScroll.dispose();
@@ -98,6 +109,56 @@ class _TaskListsPageState extends State<TaskListsPage> {
       focus.dispose();
     }
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _requestResumeRefresh();
+  }
+
+  void _heapChanged() {
+    if (!_resumeRefreshDeferred) return;
+    if (_resumeRefreshWaitingForLoad) {
+      if (_heap.loading) return;
+      _resumeRefreshWaitingForLoad = false;
+      if (_heap.error != null) {
+        _resumeRefreshDeferred = false;
+        return;
+      }
+    }
+    _drainDeferredResumeRefresh();
+  }
+
+  void _requestResumeRefresh() {
+    if (!_heapStarted) return;
+    if (_heap.lastSuccessfulLoadDate ==
+        CalendarDate.fromLocalDate(_heap.clock())) {
+      _resumeRefreshDeferred = false;
+      _resumeRefreshWaitingForLoad = false;
+      return;
+    }
+    _resumeRefreshDeferred = true;
+    _drainDeferredResumeRefresh();
+  }
+
+  void _drainDeferredResumeRefresh() {
+    if (!_resumeRefreshDeferred) return;
+    if (_heap.lastSuccessfulLoadDate ==
+        CalendarDate.fromLocalDate(_heap.clock())) {
+      _resumeRefreshDeferred = false;
+      _resumeRefreshWaitingForLoad = false;
+      return;
+    }
+    if (_editing || _captureOpen || _heap.hasPendingCompletionWrite) {
+      return;
+    }
+    if (_heap.loading) {
+      _resumeRefreshWaitingForLoad = true;
+      return;
+    }
+    _resumeRefreshDeferred = false;
+    _resumeRefreshWaitingForLoad = false;
+    _heap.load();
   }
 
   void _interacted() {
@@ -169,6 +230,7 @@ class _TaskListsPageState extends State<TaskListsPage> {
     );
     if (!mounted) return;
     _captureOpen = false;
+    _drainDeferredResumeRefresh();
     setState(() {});
     if (result == null) {
       _captureButtonFocus.requestFocus();
@@ -200,9 +262,12 @@ class _TaskListsPageState extends State<TaskListsPage> {
     if (!mounted) return;
     _editing = false;
     if (result == null) {
+      _drainDeferredResumeRefresh();
       _restoreRow(id, sourceHeap, scroll: false);
       return;
     }
+    _resumeRefreshDeferred = false;
+    _resumeRefreshWaitingForLoad = false;
     widget.inbox.applyConfirmed(result);
     _heap.applyConfirmed(result);
     _heapStarted = true;
@@ -325,6 +390,7 @@ class _TaskListsPageState extends State<TaskListsPage> {
     );
     if (!mounted) return;
     _editing = false;
+    _drainDeferredResumeRefresh();
     if (result != null) {
       if (result.deleted) {
         _projects.removeConfirmed(id!);
@@ -423,6 +489,12 @@ class _TaskListsPageState extends State<TaskListsPage> {
     onSelect: _select,
     onRetry: heap ? _heap.load : widget.inbox.load,
     onOpen: (id) => _open(id, heap),
+    onComplete: heap ? _heap.toggleCompletion : null,
+    completionPending: heap ? _heap.isPending : null,
+    completionUncertain: heap ? _heap.isUncertain : null,
+    onCheckCompletion: heap ? _heap.checkCompletion : null,
+    completionChecking: heap ? _heap.isChecking : null,
+    completionError: heap ? _heap.errorFor : null,
     rowKey: (id) => _key(id, heap),
     rowFocus: (id) => _focus(id, heap),
     organizationNotice: _noticePanel(),

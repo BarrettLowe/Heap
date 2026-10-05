@@ -16,6 +16,7 @@ Future<void> host(
   InboxController inbox,
   FakeOrganization org, {
   double scale = 1,
+  DateTime Function()? clock,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -28,6 +29,7 @@ Future<void> host(
         projects: FakeProjects(),
         inbox: inbox,
         organization: org,
+        clock: clock,
       ),
     ),
   );
@@ -139,27 +141,24 @@ void main() {
       heap.dispose();
     },
   );
-  test(
-    'confirmed heap merges are ID-unique in age order, not priority order',
-    () {
-      final heap = OnHeapController(FakeOrganization());
-      final low = detail(
-        id: '00000000-0000-0000-0000-000000000001',
-        priority: 5,
-        duration: 240,
-      );
-      final later = detail(
-        priority: 1,
-        duration: 5,
-        updated: '2026-10-04T12:34:56.000000Z',
-      );
-      heap.applyConfirmed(later);
-      heap.applyConfirmed(low);
-      heap.applyConfirmed(later);
-      expect(heap.tasks.map((t) => t.id), [low.id, later.id]);
-      heap.dispose();
-    },
-  );
+  test('confirmed heap merges are ID-unique and preserve insertion order', () {
+    final heap = OnHeapController(FakeOrganization());
+    final low = detail(
+      id: '00000000-0000-0000-0000-000000000001',
+      priority: 5,
+      duration: 240,
+    );
+    final later = detail(
+      priority: 1,
+      duration: 5,
+      updated: '2026-10-04T12:34:56.000000Z',
+    );
+    heap.applyConfirmed(later);
+    heap.applyConfirmed(low);
+    heap.applyConfirmed(later);
+    expect(heap.tasks.map((t) => t.id), [later.id, low.id]);
+    heap.dispose();
+  });
   testWidgets(
     'real inner selector loads On the heap lazily and preserves capture draft',
     (tester) async {
@@ -193,6 +192,54 @@ void main() {
       inbox.dispose();
     },
   );
+  test(
+    'confirmed editor updates keep slot; newly qualifying tasks append stale',
+    () async {
+      final first = detail(
+        id: '00000000-0000-4000-8000-000000000001',
+        priority: 2,
+        duration: 30,
+      );
+      final second = detail(
+        id: '00000000-0000-4000-8000-000000000002',
+        priority: 2,
+        duration: 30,
+      );
+      final third = detail(
+        id: '00000000-0000-4000-8000-000000000003',
+        priority: 2,
+        duration: 30,
+      );
+      final service = FakeOrganization()
+        ..onList = () async => [first, second, third];
+      final controller = OnHeapController(service);
+      await controller.load();
+      controller.applyConfirmed(
+        detail(id: second.id, title: 'Updated', priority: 2, duration: 30),
+      );
+      expect(controller.tasks.map((item) => item.id), [
+        first.id,
+        second.id,
+        third.id,
+      ]);
+      controller.applyConfirmed(
+        detail(
+          id: '00000000-0000-4000-8000-000000000004',
+          priority: 2,
+          duration: 30,
+        ),
+      );
+      expect(controller.tasks.map((item) => item.id), [
+        first.id,
+        second.id,
+        third.id,
+        '00000000-0000-4000-8000-000000000004',
+      ]);
+      expect(controller.stale, isTrue);
+      controller.dispose();
+    },
+  );
+
   testWidgets(
     'automatic qualifying Save navigates before failed refresh and keeps stale success',
     (tester) async {
@@ -400,6 +447,239 @@ void main() {
       expect(org.gets, 2);
       expect(org.puts, 1);
       expect(find.text('Edit task'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      inbox.dispose();
+    },
+  );
+
+  testWidgets('same-date resume does not reload; a changed local date does', (
+    tester,
+  ) async {
+    var now = DateTime(2026, 10, 5, 23, 59);
+    final inbox = InboxController(FakeInbox());
+    final org = FakeOrganization()
+      ..onList = () async => [detail(priority: 2, duration: 30)];
+    await host(tester, inbox, org, clock: () => now);
+    await tester.tap(find.byKey(const Key('on-heap-tab')));
+    await tester.pumpAndSettle();
+    expect(org.lists, 1);
+    await tester.tap(find.byKey(const Key('completion-$taskId')));
+    await tester.pumpAndSettle();
+    expect(org.lists, 1);
+    expect(org.lastLocalDate, '2026-10-05');
+    expect(find.text('Existing task'), findsOneWidget);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    now = DateTime(2026, 10, 5, 8);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(org.lists, 1);
+    now = DateTime(2026, 10, 6, 0, 1);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(org.lists, 2);
+    expect(org.lastLocalDate, '2026-10-06');
+    await tester.pumpWidget(const SizedBox());
+    inbox.dispose();
+  });
+
+  testWidgets('resume date is captured when the request starts', (
+    tester,
+  ) async {
+    var now = DateTime(2026, 10, 5, 23, 59);
+    final inbox = InboxController(FakeInbox());
+    final org = FakeOrganization();
+    final pending = Completer<List<TaskDetail>>();
+    org.onList = () => pending.future;
+    await host(tester, inbox, org, clock: () => now);
+    await tester.tap(find.byKey(const Key('on-heap-tab')));
+    await tester.pump();
+    expect(org.lastLocalDate, '2026-10-05');
+    now = DateTime(2026, 10, 6, 0, 1);
+    pending.complete([]);
+    await tester.pumpAndSettle();
+    expect(org.lastLocalDate, '2026-10-05');
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(org.lists, 2);
+    expect(org.lastLocalDate, '2026-10-06');
+    await tester.pumpWidget(const SizedBox());
+    inbox.dispose();
+  });
+
+  testWidgets('changed-date resume waits for capture to close', (tester) async {
+    var now = DateTime(2026, 10, 5);
+    final inbox = InboxController(FakeInbox());
+    final org = FakeOrganization();
+    await host(tester, inbox, org, clock: () => now);
+    await tester.tap(find.byKey(const Key('on-heap-tab')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('go-to-inbox')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('open-capture')));
+    await tester.pumpAndSettle();
+    now = DateTime(2026, 10, 6);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(org.lists, 1);
+    await tester.tap(find.byKey(const Key('close-capture')));
+    await tester.pumpAndSettle();
+    expect(org.lists, 2);
+    expect(org.lastLocalDate, '2026-10-06');
+    await tester.pumpWidget(const SizedBox());
+    inbox.dispose();
+  });
+  testWidgets('changed-date resume waits for an open editor to close', (
+    tester,
+  ) async {
+    var now = DateTime(2026, 10, 5);
+    final inbox = InboxController(FakeInbox());
+    final org = FakeOrganization()
+      ..onList = () async => [detail(priority: 2, duration: 30)];
+    await host(tester, inbox, org, clock: () => now);
+    await tester.tap(find.byKey(const Key('on-heap-tab')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Existing task'));
+    await tester.pumpAndSettle();
+    now = DateTime(2026, 10, 6);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(org.lists, 1);
+    await tester.tap(find.byKey(const Key('editor-back')));
+    await tester.pumpAndSettle();
+    expect(org.lists, 2);
+    expect(org.lastLocalDate, '2026-10-06');
+    await tester.pumpWidget(const SizedBox());
+    inbox.dispose();
+  });
+
+  testWidgets('changed-date resume waits for completion write transition', (
+    tester,
+  ) async {
+    var now = DateTime(2026, 10, 5);
+    final inbox = InboxController(FakeInbox());
+    final write = Completer<TaskDetail>();
+    final org = FakeOrganization();
+    org.onList = () async => [detail(priority: 2, duration: 30)];
+    org.onCompletion = (_, {required completed}) => write.future;
+    await host(tester, inbox, org, clock: () => now);
+    await tester.tap(find.byKey(const Key('on-heap-tab')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('completion-$taskId')));
+    await tester.tap(find.byKey(const Key('completion-$taskId')));
+    await tester.pump();
+    now = DateTime(2026, 10, 6);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(org.lists, 1);
+    write.complete(TaskDetail.fromJson(detailJson(status: 'completed')));
+    await tester.pumpAndSettle();
+    expect(org.lists, 2);
+    expect(org.lastLocalDate, '2026-10-06');
+    await tester.pumpWidget(const SizedBox());
+    inbox.dispose();
+  });
+
+  testWidgets('failed date refresh keeps rows and does not retry itself', (
+    tester,
+  ) async {
+    var now = DateTime(2026, 10, 5);
+    final inbox = InboxController(FakeInbox());
+    final row = detail(priority: 2, duration: 30);
+    final org = FakeOrganization()..onList = () async => [row];
+    await host(tester, inbox, org, clock: () => now);
+    await tester.tap(find.byKey(const Key('on-heap-tab')));
+    await tester.pumpAndSettle();
+    now = DateTime(2026, 10, 6);
+    org.onList = () => throw const HeapApiException('Offline');
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(org.lists, 2);
+    expect(find.text('Existing task'), findsOneWidget);
+    expect(
+      find.text(
+        'Showing previously loaded tasks. This list may be out of date.',
+      ),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(seconds: 1));
+    expect(org.lists, 2);
+    org.onList = () async => [row];
+    await tester.tap(find.byKey(const Key('refresh')));
+    await tester.pumpAndSettle();
+    expect(org.lists, 3);
+    expect(
+      find.text(
+        'Showing previously loaded tasks. This list may be out of date.',
+      ),
+      findsNothing,
+    );
+    await tester.pumpWidget(const SizedBox());
+    inbox.dispose();
+  });
+  testWidgets('old list error does not cancel resume deferred behind a write', (
+    tester,
+  ) async {
+    var now = DateTime(2026, 10, 5);
+    final inbox = InboxController(FakeInbox());
+    final row = detail(priority: 2, duration: 30);
+    final write = Completer<TaskDetail>();
+    final org = FakeOrganization()..onList = () async => [row];
+    await host(tester, inbox, org, clock: () => now);
+    await tester.tap(find.byKey(const Key('on-heap-tab')));
+    await tester.pumpAndSettle();
+    org.onList = () => throw const HeapApiException('Old error');
+    await tester.tap(find.byKey(const Key('refresh')));
+    await tester.pumpAndSettle();
+    expect(org.lists, 2);
+    org.onList = () async => [row];
+    org.onCompletion = (_, {required completed}) => write.future;
+    await tester.ensureVisible(find.byKey(const Key('completion-$taskId')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('completion-$taskId')));
+    await tester.pump();
+    now = DateTime(2026, 10, 6);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(org.lists, 2);
+    write.complete(TaskDetail.fromJson(detailJson(status: 'completed')));
+    await tester.pumpAndSettle();
+    expect(org.lists, 3);
+    expect(org.lastLocalDate, '2026-10-06');
+    await tester.pumpWidget(const SizedBox());
+    inbox.dispose();
+  });
+
+  testWidgets(
+    'midnight without resume does not refresh when editor or capture closes',
+    (tester) async {
+      var now = DateTime(2026, 10, 5);
+      final inbox = InboxController(FakeInbox());
+      final org = FakeOrganization()
+        ..onList = () async => [detail(priority: 2, duration: 30)];
+      await host(tester, inbox, org, clock: () => now);
+      await tester.tap(find.byKey(const Key('on-heap-tab')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Existing task'));
+      await tester.pumpAndSettle();
+      now = DateTime(2026, 10, 6);
+      await tester.tap(find.byKey(const Key('editor-back')));
+      await tester.pumpAndSettle();
+      expect(org.lists, 1);
+      await tester.tap(find.byKey(const Key('inbox-tab')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('open-capture')));
+      await tester.pumpAndSettle();
+      now = DateTime(2026, 10, 7);
+      await tester.tap(find.byKey(const Key('close-capture')));
+      await tester.pumpAndSettle();
+      expect(org.lists, 1);
       await tester.pumpWidget(const SizedBox());
       inbox.dispose();
     },

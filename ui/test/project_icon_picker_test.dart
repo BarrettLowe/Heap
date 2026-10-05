@@ -139,7 +139,7 @@ void main() {
     await browse(t);
     final search = t.widget<EditableText>(find.byType(EditableText).last);
     expect(search.focusNode.hasFocus, true);
-    expect(search.keyboardType, TextInputType.none);
+    expect(search.keyboardType, TextInputType.text);
     expect(t.testTextInput.hasAnyClients, true);
     await t.enterText(
       find.byKey(const Key('icon-search')),
@@ -313,7 +313,7 @@ void main() {
     expect(find.text('Abacus'), findsOneWidget);
   });
 
-  testWidgets('Android always full screen and keyboard Enter chooses', (
+  testWidgets('Android search opens and reopens keyboard; Enter chooses', (
     t,
   ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
@@ -326,10 +326,14 @@ void main() {
       t.view.physicalSize.width / t.view.devicePixelRatio,
     );
     final search = t.widget<EditableText>(find.byType(EditableText).last);
-    expect(search.keyboardType, TextInputType.none);
+    expect(search.keyboardType, TextInputType.text);
     expect(t.testTextInput.hasAnyClients, true);
+    expect(t.testTextInput.isVisible, true);
     t.testTextInput.enterText('airplane takeoff');
     await t.pumpAndSettle();
+    t.testTextInput.hide();
+    await t.pump();
+    expect(t.testTextInput.isVisible, false);
     await t.tap(find.byKey(const Key('icon-search')));
     await t.pumpAndSettle();
     expect(

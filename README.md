@@ -32,7 +32,7 @@ flutter run -d emulator-5554 --dart-define=HEAP_API_BASE_URL=http://10.0.2.2:800
 Start the emulator first, and use its actual ID if it differs. The database stays
 in the Compose volume across container restarts. **`docker compose down -v`
 deletes that data.** Physical phones need a reachable VPN server address;
-release builds need HTTPS. See the setup links above for web/CORS configuration.
+release builds normally need HTTPS, with a hostname-specific HTTP exception for the private beta at `heap.lowehomeautomation.xyz`. See the setup links above for web/CORS configuration.
 
 ## Run tests
 

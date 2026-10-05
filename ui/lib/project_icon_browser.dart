@@ -44,7 +44,6 @@ class _IconBrowserState extends State<_IconBrowser> {
     const TextEditingValue(selection: TextSelection.collapsed(offset: 0)),
   );
   final _searchFocus = FocusNode();
-  bool _keyboardRequested = false;
   final _scroll = ScrollController();
   final _tileFocus = <String, FocusNode>{};
   List<String> _names = searchMdiIcons('');
@@ -238,24 +237,7 @@ class _IconBrowserState extends State<_IconBrowser> {
                           controller: _search,
                           focusNode: _searchFocus,
                           autofocus: true,
-                          // Keep the input connection usable for hardware typing without a soft keyboard.
-                          keyboardType:
-                              !_keyboardRequested &&
-                                  Theme.of(context).platform ==
-                                      TargetPlatform.android
-                              ? TextInputType.none
-                              : TextInputType.text,
-                          onTap: () {
-                            if (_keyboardRequested) return;
-                            setState(() => _keyboardRequested = true);
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              if (mounted) {
-                                SystemChannels.textInput.invokeMethod<void>(
-                                  'TextInput.show',
-                                );
-                              }
-                            });
-                          },
+                          keyboardType: TextInputType.text,
                           selectAllOnFocus: false,
                           decoration: InputDecoration(
                             labelText:

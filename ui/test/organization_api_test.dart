@@ -18,6 +18,21 @@ OrganizationSubmission command() => OrganizationSubmission(
   ),
 );
 void main() {
+  test(
+    'Heap rejects noncanonical or impossible local dates before requesting',
+    () async {
+      final client = MockClient((_) async => fail('request must not be sent'));
+      final api = HeapApi(client: client, baseUri: Uri.parse('http://test'));
+      for (final date in ['2026-2-05', '2026-02-30', '2026-10-05T00:00:00']) {
+        await expectLater(
+          api.listOnHeap(localDate: date),
+          throwsFormatException,
+        );
+      }
+      client.close();
+    },
+  );
+
   test('unexpected successful write status is uncertain rather than safe to resubmit', () async {
     for (final capture in [true, false]) {
       final client = MockClient(
@@ -60,6 +75,7 @@ void main() {
       final client = MockClient((request) async {
         expect(request.method, 'GET');
         if (request.url.path == '/api/v1/heap') {
+          expect(request.url.queryParameters, {'local_date': '2026-10-05'});
           return http.Response(
             jsonEncode({
               'items': [detailJson(priority: 2, duration: 30, waiting: true)],
@@ -75,7 +91,7 @@ void main() {
       expect(task.priority, isNull);
       expect(task.externallyBlocked, false);
       expect(task.updatedAtToken, '2026-10-03T12:34:56.000000Z');
-      final list = await api.listOnHeap();
+      final list = await api.listOnHeap(localDate: '2026-10-05');
       expect(list.single.status, 'on_heap');
       expect(list.single.onHeapSince, DateTime.utc(2026, 10, 3, 12, 34, 56));
       expect(list.single.externallyBlocked, true);
@@ -94,6 +110,7 @@ void main() {
         'duration_minutes': null,
         'externally_blocked': true,
         'project_id': null,
+        'due_date': null,
         'expected_updated_at': '2026-10-03T12:34:56.000000Z',
       });
       return http.Response(
@@ -326,7 +343,10 @@ void main() {
         (_) async => http.Response(jsonEncode({'items': items}), 200),
       );
       final api = HeapApi(client: client, baseUri: Uri.parse('http://test'));
-      await expectLater(api.listOnHeap(), throwsA(isA<HeapApiException>()));
+      await expectLater(
+        api.listOnHeap(localDate: '2026-10-05'),
+        throwsA(isA<HeapApiException>()),
+      );
       client.close();
     }
   });

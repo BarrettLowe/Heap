@@ -13,7 +13,7 @@ flutter run --dart-define=HEAP_API_BASE_URL=http://10.0.2.2:8000
 
 The Android emulator reaches the host machine through `10.0.2.2`. A physical device must use a server address it can reach, such as the host's VPN/Tailscale address. The API must be reachable from that device.
 
-If the value is missing or is not a valid HTTP(S) origin, the app shows a setup message instead of an empty inbox. Android debug builds permit plain HTTP for local development. Release builds do not enable cleartext traffic; use HTTPS. A web app loaded over HTTPS also needs an HTTPS API, because browsers block mixed-content HTTP requests.
+If the value is missing or is not a valid HTTP(S) origin, the app shows a setup message instead of an empty inbox. Android debug builds permit plain HTTP for local development. Release builds configure a cleartext exception only for `heap.lowehomeautomation.xyz` for private-network beta testing; other hosts require HTTPS. Build that beta with `flutter build apk --release --dart-define=HEAP_API_BASE_URL=http://heap.lowehomeautomation.xyz`. Keep this HTTP backend on a trusted private network. A web app loaded over HTTPS also needs an HTTPS API, because browsers block mixed-content HTTP requests.
 
 For browser access, configure the backend's `HEAP_CORS_ORIGINS` with the exact origin serving the web app (for example `http://localhost:7357`). Do not use a wildcard. The UI does not configure backend CORS.
 

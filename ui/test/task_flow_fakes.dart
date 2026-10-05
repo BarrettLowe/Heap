@@ -14,6 +14,7 @@ Map<String, Object?> detailJson({
   bool waiting = false,
   String updated = '2026-10-03T12:34:56.000000Z',
   String? since,
+  String? dueDate,
 }) {
   final placement =
       status ?? (priority != null && duration != null ? 'on_heap' : 'inbox');
@@ -27,6 +28,7 @@ Map<String, Object?> detailJson({
     'duration_minutes': duration,
     'externally_blocked': waiting,
     'project_id': projectId,
+    'due_date': dueDate,
     'on_heap_since': since ?? (placement == 'on_heap' ? updated : null),
   };
 }
@@ -78,7 +80,11 @@ class FakeOrganization implements OrganizationService {
   int lists = 0;
   Future<TaskDetail> Function(String)? onGet;
   Future<TaskDetail> Function(OrganizationSubmission)? onSave;
+  Future<TaskDetail> Function(TaskDetail, {required bool completed})?
+  onCompletion;
+  int completionWrites = 0;
   Future<List<TaskDetail>> Function()? onList;
+  String? lastLocalDate;
   OrganizationSubmission? lastSubmission;
   @override
   Future<TaskDetail> getTask(String id) {
@@ -105,8 +111,33 @@ class FakeOrganization implements OrganizationService {
   }
 
   @override
-  Future<List<TaskDetail>> listOnHeap() {
+  Future<TaskDetail> setCompletion(
+    TaskDetail original, {
+    required bool completed,
+  }) {
+    completionWrites++;
+    return onCompletion?.call(original, completed: completed) ??
+        Future.value(
+          TaskDetail.fromJson({
+            'id': original.id,
+            'title': original.title,
+            'status': completed ? 'completed' : 'on_heap',
+            'created_at': formatUtcTimestamp(original.createdAt),
+            'updated_at': '2026-10-04T12:34:56.123456Z',
+            'priority': original.priority,
+            'duration_minutes': original.durationMinutes,
+            'externally_blocked': original.externallyBlocked,
+            'project_id': original.projectId,
+            'on_heap_since': formatUtcTimestamp(original.onHeapSince!),
+            'due_date': original.dueDate?.toString(),
+          }),
+        );
+  }
+
+  @override
+  Future<List<TaskDetail>> listOnHeap({required String localDate}) {
     lists++;
+    lastLocalDate = localDate;
     return onList?.call() ?? Future.value([]);
   }
 }

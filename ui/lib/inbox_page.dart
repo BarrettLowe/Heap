@@ -27,6 +27,12 @@ class TaskListBody extends StatelessWidget {
     this.filters,
     this.filteredOut = false,
     this.onClearFilter,
+    this.onComplete,
+    this.completionPending,
+    this.completionUncertain,
+    this.onCheckCompletion,
+    this.completionChecking,
+    this.completionError,
   });
   final bool onHeap;
   final List<InboxTask> tasks;
@@ -48,6 +54,12 @@ class TaskListBody extends StatelessWidget {
   final Widget? filters;
   final bool filteredOut;
   final VoidCallback? onClearFilter;
+  final ValueChanged<String>? onComplete;
+  final bool Function(String)? completionPending;
+  final bool Function(String)? completionUncertain;
+  final ValueChanged<String>? onCheckCompletion;
+  final bool Function(String)? completionChecking;
+  final String? Function(String)? completionError;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -87,7 +99,7 @@ class TaskListBody extends StatelessWidget {
               ),
               if (onHeap)
                 const Text(
-                  'Longest on the heap first.',
+                  'Ordered by priority, due date, and time on the Heap.',
                   style: TextStyle(color: heapMuted),
                 ),
               const SizedBox(height: 16),
@@ -223,6 +235,17 @@ class TaskListBody extends StatelessWidget {
                   focusNode: rowFocus(task.id),
                   highlighted: highlightedId == task.id,
                   onOpen: () => onOpen(task.id),
+                  onHeap: onHeap,
+                  onComplete: onHeap ? () => onComplete?.call(task.id) : null,
+                  completionPending: completionPending?.call(task.id) ?? false,
+                  completionUncertain:
+                      completionUncertain?.call(task.id) ?? false,
+                  onCheckCompletion: onHeap
+                      ? () => onCheckCompletion?.call(task.id)
+                      : null,
+                  completionChecking:
+                      completionChecking?.call(task.id) ?? false,
+                  completionError: completionError?.call(task.id),
                 ),
             ],
           ),

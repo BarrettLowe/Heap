@@ -1,3 +1,4 @@
+from datetime import UTC, date, datetime
 import sqlite3
 from contextlib import closing
 from pathlib import Path
@@ -74,6 +75,7 @@ def test_priority_and_duration_survive_database_reopen(
         task = TaskOperator(store).capture("Repair the fence")
         task.priority = priority
         task.duration = duration
+        task.on_heap_since = datetime(2026, 1, 2, 12, tzinfo=UTC)
         store.save(task)
 
     with SQLiteTaskStore(database) as store:
@@ -81,10 +83,10 @@ def test_priority_and_duration_survive_database_reopen(
         tasks = TaskOperator(store)
         if duration is Duration.UNKNOWN:
             assert tasks.list_inbox() == [task]
-            assert tasks.list_on_heap() == []
+            assert tasks.list_on_heap(today=date(2026, 10, 5)) == []
         else:
             assert tasks.list_inbox() == []
-            assert tasks.list_on_heap() == [task]
+            assert tasks.list_on_heap(today=date(2026, 10, 5)) == [task]
 
 
 def test_older_database_keeps_tasks_with_unset_priority_and_unknown_duration(

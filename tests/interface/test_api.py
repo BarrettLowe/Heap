@@ -62,6 +62,7 @@ def test_capture_returns_saved_task_with_contract_utc_format(
                     "duration_minutes": None,
                     "externally_blocked": False,
                     "project_id": None,
+                    "due_date": None,
                 }
             ]
         }

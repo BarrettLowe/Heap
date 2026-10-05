@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -52,7 +52,7 @@ def test_move_to_heap_survives_reopening(
         assert TaskOperator(store).list_inbox() == []
     assert moved.status is TaskStatus.ON_HEAP
     assert moved.on_heap_since == ON_HEAP
-    assert moved.updated_at == ON_HEAP
+    assert moved.updated_at > ON_HEAP
     assert moved.created_at == CREATED
     assert moved.title == captured.title
     assert moved.priority is Priority.P2
@@ -116,21 +116,25 @@ def test_edits_do_not_reset_on_heap_since(tmp_path: Path, monkeypatch: MonkeyPat
     database = tmp_path / "heap.sqlite"
     with SQLiteTaskStore(database) as store:
         tasks = TaskOperator(store)
+        monkeypatch.setattr(task_operator, "current_time", lambda: CREATED)
         task = tasks.capture("Repair the fence")
         monkeypatch.setattr(task_operator, "current_time", lambda: ON_HEAP)
         tasks.set_priority(task.id, Priority.P2)
         tasks.set_duration(task.id, Duration.THIRTY_MINUTES)
-        tasks.move_to_heap(task.id)
+        entered = tasks.move_to_heap(task.id)
         monkeypatch.setattr(task_operator, "current_time", lambda: LATER)
-        tasks.set_title(task.id, "Replace the north fence boards")
-        tasks.set_priority(task.id, Priority.P1)
+        title_edit = tasks.set_title(task.id, "Replace the north fence boards")
+        priority_edit = tasks.set_priority(task.id, Priority.P1)
         edited = tasks.set_duration(task.id, Duration.ONE_HOUR)
 
     with SQLiteTaskStore(database) as store:
         assert store.get(task.id) == edited
     assert edited.status is TaskStatus.ON_HEAP
     assert edited.on_heap_since == ON_HEAP
-    assert edited.updated_at == LATER
+    assert entered.on_heap_since == ON_HEAP
+    assert title_edit.updated_at > entered.updated_at
+    assert priority_edit.updated_at > title_edit.updated_at
+    assert edited.updated_at > priority_edit.updated_at
 
 
 def test_moving_missing_task_raises_key_error(tmp_path: Path) -> None:
@@ -151,6 +155,7 @@ def test_clearing_required_field_returns_heap_task_to_inbox(
     monkeypatch.setattr(task_operator, "current_time", lambda: CREATED)
     with SQLiteTaskStore(database) as store:
         tasks = TaskOperator(store)
+        monkeypatch.setattr(task_operator, "current_time", lambda: CREATED)
         task = tasks.capture("Repair the fence")
         tasks.set_priority(task.id, Priority.P2)
         tasks.set_duration(task.id, Duration.THIRTY_MINUTES)
@@ -184,6 +189,7 @@ def test_restoring_required_field_automatically_reenters_with_new_heap_time(
     database = tmp_path / "heap.sqlite"
     with SQLiteTaskStore(database) as store:
         tasks = TaskOperator(store)
+        monkeypatch.setattr(task_operator, "current_time", lambda: CREATED)
         task = tasks.capture("Repair the fence")
         tasks.set_priority(task.id, Priority.P2)
         tasks.set_duration(task.id, Duration.THIRTY_MINUTES)
@@ -199,7 +205,7 @@ def test_restoring_required_field_automatically_reenters_with_new_heap_time(
         assert restored.status is TaskStatus.ON_HEAP
         assert restored.on_heap_since == LATER
         assert tasks.list_inbox() == []
-        assert tasks.list_on_heap() == [restored]
+        assert tasks.list_on_heap(today=date(2026, 10, 5)) == [restored]
         moved = tasks.move_to_heap(task.id)
         assert moved == restored
         assert moved.status is TaskStatus.ON_HEAP

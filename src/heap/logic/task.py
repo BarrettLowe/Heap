@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from uuid import UUID
 
@@ -30,3 +30,4 @@ class Task:
     on_heap_since: datetime | None = None
     completed_at: datetime | None = None
     externally_blocked: bool = False
+    due_date: date | None = None

@@ -1,3 +1,5 @@
+import 'calendar_date.dart';
+
 const priorityLabels = <int, String>{
   1: 'P1 Critical',
   2: 'P2 Important',
@@ -23,6 +25,7 @@ class InboxTask {
     this.priority,
     this.durationMinutes,
     this.externallyBlocked = false,
+    this.dueDate,
   });
   final String id;
   final String title;
@@ -32,6 +35,7 @@ class InboxTask {
   final int? priority;
   final int? durationMinutes;
   final bool externallyBlocked;
+  final CalendarDate? dueDate;
 
   factory InboxTask.fromJson(
     Object? value, {
@@ -61,6 +65,7 @@ class InboxTask {
             'priority',
             'duration_minutes',
             'externally_blocked',
+            'due_date',
           ],
         })) {
       throw const FormatException('Task is missing required fields.');
@@ -73,6 +78,7 @@ class InboxTask {
     final priority = metadata ? value['priority'] : null;
     final duration = metadata ? value['duration_minutes'] : null;
     final waiting = metadata ? value['externally_blocked'] : false;
+    final dueDateValue = metadata ? value['due_date'] : null;
     if (id is! String ||
         !_uuidPattern.hasMatch(id) ||
         title is! String ||
@@ -85,9 +91,13 @@ class InboxTask {
             (priority is! int || !priorityLabels.containsKey(priority))) ||
         (duration != null &&
             (duration is! int || !durationChoices.contains(duration))) ||
-        waiting is! bool) {
+        waiting is! bool ||
+        (metadata && dueDateValue != null && dueDateValue is! String)) {
       throw const FormatException('Task fields have invalid values.');
     }
+    final dueDate = dueDateValue == null
+        ? null
+        : CalendarDate.parse(dueDateValue as String);
     final createdAt = parseUtcTimestamp(created);
     final updatedAt = parseUtcTimestamp(updated);
     if ((!metadata && created != updated) ||
@@ -109,6 +119,7 @@ class InboxTask {
       priority: priority as int?,
       durationMinutes: duration as int?,
       externallyBlocked: waiting,
+      dueDate: dueDate,
     );
   }
 

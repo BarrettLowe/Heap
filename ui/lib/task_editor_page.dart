@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'calendar_date.dart';
+
 import 'heap_api.dart';
 import 'heap_style.dart';
 import 'project.dart';
@@ -29,10 +31,12 @@ class TaskEditorPage extends StatefulWidget {
 class _TaskEditorPageState extends State<TaskEditorPage> {
   late final TaskEditorController _controller;
   final _title = TextEditingController();
+  final _dueDateText = TextEditingController();
   final _titleFocus = FocusNode();
   final _headingFocus = FocusNode();
   final _priorityFocus = FocusNode();
   final _durationFocus = FocusNode();
+  final _dueDateFocus = FocusNode();
   final _waitingFocus = FocusNode();
   FocusNode? _lastFieldFocus;
   final _scroll = ScrollController();
@@ -50,6 +54,7 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
       _titleFocus,
       _priorityFocus,
       _durationFocus,
+      _dueDateFocus,
       _waitingFocus,
     ]) {
       focus.addListener(() {
@@ -77,10 +82,19 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
     }
   }
 
+  String _dueDateLabel(CalendarDate? date) => date == null
+      ? 'None'
+      : MaterialLocalizations.of(context).formatCompactDate(date.toLocalDate());
+
   void _changed() {
     if (!mounted) return;
     final draft = _controller.draft;
     if (draft != null && _title.text != draft.title) _title.text = draft.title;
+    if (draft != null) {
+      final date = draft.dueDate;
+      final text = date == null ? '' : _dueDateLabel(date);
+      if (_dueDateText.text != text) _dueDateText.text = text;
+    }
     setState(() {});
   }
 
@@ -89,10 +103,12 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
     _controller.removeListener(_changed);
     _controller.dispose();
     _title.dispose();
+    _dueDateText.dispose();
     _titleFocus.dispose();
     _headingFocus.dispose();
     _priorityFocus.dispose();
     _durationFocus.dispose();
+    _dueDateFocus.dispose();
     _waitingFocus.dispose();
     _scroll.dispose();
     super.dispose();
@@ -168,6 +184,8 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
         ? _priorityFocus
         : errors.containsKey('duration_minutes')
         ? _durationFocus
+        : errors.containsKey('due_date')
+        ? _dueDateFocus
         : errors.containsKey('externally_blocked')
         ? _waitingFocus
         : null;
@@ -437,6 +455,8 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
         },
       ),
       const SizedBox(height: 16),
+      _dueDateField(draft, controller.editable),
+      const SizedBox(height: 16),
       CheckboxListTile(
         key: const Key('editor-awaiting'),
         focusNode: _waitingFocus,
@@ -463,6 +483,71 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
       ],
     ]);
     return fields;
+  }
+
+  Widget _dueDateField(OrganizationDraft draft, bool editable) {
+    final date = draft.dueDate;
+    Future<void> pickDate() async {
+      if (!editable) return;
+      final selected = await showDatePicker(
+        context: context,
+        initialDate: date?.toLocalDate() ?? DateTime.now(),
+        firstDate: DateTime(1, 1, 1),
+        lastDate: DateTime(9999, 12, 31),
+        helpText: 'Select due date',
+      );
+      if (!mounted) return;
+      _dueDateFocus.requestFocus();
+      if (selected == null) return;
+      final picked = CalendarDate.fromLocalDate(selected);
+      if (picked != date) {
+        _controller.edit(dueDate: picked, setDueDate: true);
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Semantics(
+          label: 'Due date: ${_dueDateLabel(date)}',
+          child: TextFormField(
+            key: const Key('editor-due-date'),
+            focusNode: _dueDateFocus,
+            readOnly: true,
+            enabled: editable,
+            onTap: pickDate,
+            decoration: InputDecoration(
+              labelText: 'Due date',
+              hintText: 'None',
+              border: const OutlineInputBorder(),
+              errorText: _controller.fieldErrors['due_date'],
+              suffixIcon: IconButton(
+                tooltip: 'Choose due date',
+                onPressed: editable ? pickDate : null,
+                icon: const Icon(Icons.calendar_today),
+              ),
+            ),
+            controller: _dueDateText,
+          ),
+        ),
+        if (date != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Semantics(
+              label: 'Clear due date',
+              button: true,
+              child: TextButton(
+                key: const Key('editor-clear-due-date'),
+                style: TextButton.styleFrom(minimumSize: const Size(0, 48)),
+                onPressed: editable
+                    ? () => _controller.edit(setDueDate: true)
+                    : null,
+                child: const Text('Clear date'),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 
   Widget _projectDropdown(OrganizationDraft draft, bool editable) {
@@ -651,6 +736,7 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
       Text(
         'Duration: ${draft.durationMinutes == null ? 'Unknown' : '${draft.durationMinutes} min'}',
       ),
+      Text('Due date: ${_dueDateLabel(draft.dueDate)}'),
       Text(
         'Awaiting external dependencies: ${draft.externallyBlocked ? 'Yes' : 'No'}',
       ),
