@@ -99,7 +99,7 @@ class TaskListBody extends StatelessWidget {
               ),
               if (onHeap)
                 const Text(
-                  'Longest on the heap first.',
+                  'Ordered by priority, due date, and time on the Heap.',
                   style: TextStyle(color: heapMuted),
                 ),
               const SizedBox(height: 16),

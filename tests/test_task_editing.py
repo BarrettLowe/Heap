@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import date, UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
@@ -192,7 +192,7 @@ def test_project_assignment_reassignment_and_removal_persist(
             tasks = TaskOperator(store, project_store)
             assert store.get(captured_task.id) == assigned
             assert tasks.list_inbox() == []
-            assert tasks.list_on_heap() == [assigned]
+            assert tasks.list_on_heap(today=date(2026, 10, 5)) == [assigned]
             reassigned_at = datetime(2026, 1, 4, 12, 0, tzinfo=UTC)
             monkeypatch.setattr(task_operator, "current_time", lambda: reassigned_at)
             moved = tasks.set_project(captured_task.id, second.id)

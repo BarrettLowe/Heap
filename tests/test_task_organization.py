@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import date, UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -30,6 +30,7 @@ def organize(tasks: TaskOperator, task: Task, *, waiting: bool = False) -> Task:
         duration=Duration.THIRTY_MINUTES,
         externally_blocked=waiting,
         project_id=task.project_id,
+        due_date=task.due_date,
     )
 
 
@@ -80,7 +81,7 @@ def test_atomic_organization_saves_once_reads_time_once_and_preserves_data(
     with SQLiteTaskStore(database) as store:
         assert store.get(original.id) == saved
         assert store.list_dependencies(original.id) == [prerequisite.id]
-        assert TaskOperator(store).list_on_heap() == [saved]
+        assert TaskOperator(store).list_on_heap(today=date(2026, 10, 5)) == [saved]
         assert TaskOperator(store).list_inbox() == [prerequisite]
 
 
@@ -115,6 +116,7 @@ def test_no_op_does_not_save_or_read_time(
                 duration=original.duration,
                 externally_blocked=original.externally_blocked,
                 project_id=original.project_id,
+                due_date=original.due_date,
             )
             == original
         )
@@ -151,6 +153,7 @@ def test_clear_and_restore_requirements_automatically_change_placement_and_age(
             duration=duration,
             externally_blocked=True,
             project_id=saved.project_id,
+            due_date=saved.due_date,
         )
         assert cleared.status is TaskStatus.INBOX
         assert cleared.on_heap_since is None
@@ -183,7 +186,7 @@ def test_both_setter_orders_auto_qualify_and_preserve_age_on_edit(
         monkeypatch.setattr(task_operator, "current_time", lambda: EDITED)
         edited = organize(tasks, saved, waiting=True)
         assert edited.on_heap_since == ON_HEAP
-        assert edited.updated_at == EDITED
+        assert edited.updated_at == max(EDITED, saved.updated_at + timedelta(microseconds=1))
         unblocked = tasks.set_externally_blocked(saved.id, False)
         assert unblocked.on_heap_since == ON_HEAP
         assert unblocked.status is TaskStatus.ON_HEAP
@@ -201,7 +204,7 @@ def test_snapshot_edit_writers_normalize_legacy_ready_inbox(
     with SQLiteTaskStore(tmp_path / "heap.sqlite") as store:
         tasks = TaskOperator(store)
         legacy = replace(
-            tasks.capture("Legacy"), priority=Priority.P2, duration=Duration.ONE_HOUR
+            tasks.capture("Legacy"), priority=Priority.P2, duration=Duration.ONE_HOUR, updated_at=CREATED
         )
         store.save(legacy)
         reads = 0
@@ -317,9 +320,9 @@ def test_lists_query_qualification_include_waiting_and_break_age_ties(
         store.save_many([high, oldest, incomplete, completed, low])
         store.add_dependency(oldest.id, incomplete.id, EDITED)
         assert tasks.get_dependency_blocking([oldest.id]) == {oldest.id: True}
-        listed = tasks.list_on_heap()
+        listed = tasks.list_on_heap(today=date(2026, 10, 5))
         assert [task.id for task in listed] == [oldest.id, low.id, high.id]
         assert tasks.list_inbox() == [incomplete]
         listed[0].title = "Local mutation"
         assert tasks.get(oldest.id).title == oldest.title
-        assert tasks.list_on_heap()[0].title == oldest.title
+        assert tasks.list_on_heap(today=date(2026, 10, 5))[0].title == oldest.title

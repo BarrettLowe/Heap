@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'calendar_date.dart';
 import 'heap_api.dart';
 import 'task_detail.dart';
 
@@ -73,6 +74,8 @@ class TaskEditorController extends ChangeNotifier {
     bool setProject = false,
     bool setPriority = false,
     bool setDuration = false,
+    CalendarDate? dueDate,
+    bool setDueDate = false,
   }) {
     if (!editable) return;
     draft = OrganizationDraft(
@@ -81,11 +84,13 @@ class TaskEditorController extends ChangeNotifier {
       durationMinutes: setDuration ? durationMinutes : draft!.durationMinutes,
       externallyBlocked: externallyBlocked ?? draft!.externallyBlocked,
       projectId: setProject ? projectId : draft!.projectId,
+      dueDate: setDueDate ? dueDate : draft!.dueDate,
     );
     final errors = {...fieldErrors};
     if (title != null) errors.remove('title');
     if (setPriority) errors.remove('priority');
     if (setDuration) errors.remove('duration_minutes');
+    if (setDueDate) errors.remove('due_date');
     if (externallyBlocked != null) errors.remove('externally_blocked');
     fieldErrors = Map.unmodifiable(errors);
     _notify();
@@ -185,7 +190,7 @@ class TaskEditorController extends ChangeNotifier {
     error = null;
     fieldErrors = const {};
     notice = keepEdits
-        ? 'Your edits are not saved. Saving will replace the server\'s title, priority, duration, awaiting flag, and project with your values.'
+        ? 'Your edits are not saved. Saving will replace the server\'s title, priority, duration, due date, awaiting flag, and project with your values.'
         : null;
     _notify();
   }

@@ -5,7 +5,7 @@ import logging
 import os
 import threading
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -129,6 +129,21 @@ class OrganizationRequest(BaseModel):
     expected_updated_at: StrictStr
     externally_blocked: StrictBool
     project_id: StrictStr | None
+    due_date: StrictStr | None
+
+    @field_validator("due_date")
+    @classmethod
+    def validate_due_date(cls, value: str | None) -> str | None:
+        """Accept only a canonical real calendar date or null."""
+        if value is None:
+            return None
+        try:
+            parsed = date.fromisoformat(value)
+        except ValueError as error:
+            raise ValueError("Must be a canonical YYYY-MM-DD date or null.") from error
+        if parsed.isoformat() != value:
+            raise ValueError("Must be a canonical YYYY-MM-DD date or null.")
+        return value
 
     @field_validator("title")
     @classmethod
@@ -266,6 +281,7 @@ def _serialize_inbox_task(task: Task) -> dict[str, str | int | bool | None]:
         "duration_minutes": task.duration.minutes,
         "externally_blocked": task.externally_blocked,
         "project_id": str(task.project_id) if task.project_id is not None else None,
+        "due_date": task.due_date.isoformat() if task.due_date is not None else None,
     }
 
 
@@ -540,13 +556,28 @@ def create_app(
                 return _error_response(404, "not_found", "Not found.")
         return _serialize_task_detail(task)
 
-    @application.get("/api/v1/heap")
+    @application.get("/api/v1/heap", response_model=None)
     async def list_on_heap(
         request: Request,
-    ) -> dict[str, list[dict[str, str | int | bool | None]]]:
-        """Return all snapshots on the heap in oldest-first order."""
+    ) -> JSONResponse | dict[str, list[dict[str, str | int | bool | None]]]:
+        """Return every qualifying Heap task in policy order for the supplied date."""
+        values = request.query_params.getlist("local_date")
+        if len(values) != 1:
+            return _error_response(
+                422, "invalid_request", "Request validation failed.",
+                [{"field": "local_date", "message": "Must be one canonical YYYY-MM-DD date."}],
+            )
+        try:
+            today = date.fromisoformat(values[0])
+        except ValueError:
+            today = None
+        if today is None or today.isoformat() != values[0]:
+            return _error_response(
+                422, "invalid_request", "Request validation failed.",
+                [{"field": "local_date", "message": "Must be one canonical YYYY-MM-DD date."}],
+            )
         with request.app.state.operation_lock:
-            tasks = request.app.state.tasks.list_on_heap()
+            tasks = request.app.state.tasks.list_on_heap(today=today)
         return {"items": [_serialize_task_detail(task) for task in tasks]}
 
     @application.put("/api/v1/tasks/{task_id}/organization", response_model=None)
@@ -594,6 +625,7 @@ def create_app(
                     ),
                     duration=Duration(payload.duration_minutes),
                     externally_blocked=payload.externally_blocked,
+                    due_date=(date.fromisoformat(payload.due_date) if payload.due_date is not None else None),
                     project_id=(
                         UUID(payload.project_id)
                         if payload.project_id is not None

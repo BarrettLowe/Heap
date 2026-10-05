@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:heap_app/heap_api.dart';
 import 'package:heap_app/task_detail.dart';
@@ -266,7 +267,9 @@ void main() {
   testWidgets(
     'saving blocks visible and system back, fields, waiting and repeated PUT',
     (tester) async {
-      final org = FakeOrganization();
+      final org = FakeOrganization()
+        ..onGet = (_) async =>
+            TaskDetail.fromJson(detailJson(dueDate: '2026-10-05'));
       final pending = Completer<TaskDetail>();
       org.onSave = (_) => pending.future;
       await openEditor(tester, org);
@@ -278,6 +281,18 @@ void main() {
             .widget<TextFormField>(find.byKey(const Key('editor-title')))
             .enabled,
         false,
+      );
+      expect(
+        tester
+            .widget<TextFormField>(find.byKey(const Key('editor-due-date')))
+            .enabled,
+        false,
+      );
+      expect(
+        tester
+            .widget<TextButton>(find.byKey(const Key('editor-clear-due-date')))
+            .onPressed,
+        isNull,
       );
       expect(
         tester
@@ -359,6 +374,58 @@ void main() {
       }
     },
   );
+  testWidgets('conflicting due dates retain distinct years in summaries', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final org = FakeOrganization();
+    org.onGet = (_) async =>
+        TaskDetail.fromJson(detailJson(dueDate: '2026-10-06'));
+    org.onSave = (_) => throw const HeapApiException(
+      'Conflict',
+      statusCode: 409,
+      code: 'task_conflict',
+    );
+    await openEditor(tester, org);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('editor-title')), 'My edits');
+    await revealTap(tester, find.byKey(const Key('editor-save')));
+    org.onGet = (_) async =>
+        TaskDetail.fromJson(detailJson(dueDate: '2026-10-06'));
+    await revealTap(tester, find.byKey(const Key('reload-saved-task')));
+    await revealTap(tester, find.byKey(const Key('keep-my-edits')));
+    await revealTap(tester, find.byKey(const Key('editor-due-date')));
+    await tester.tap(find.text('October 2026'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('2027').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(ValueKey<DateTime>(DateTime(2027, 10, 6))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK').last);
+    await tester.pumpAndSettle();
+    await revealTap(tester, find.byKey(const Key('editor-save')));
+    org.onGet = (_) async =>
+        TaskDetail.fromJson(detailJson(dueDate: '2026-10-06'));
+    await revealTap(tester, find.byKey(const Key('reload-saved-task')));
+    final localizations = MaterialLocalizations.of(
+      tester.element(find.byType(TaskEditorPage)),
+    );
+    expect(
+      find.text(
+        'Due date: ${localizations.formatCompactDate(DateTime(2026, 10, 6))}',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.text(
+        'Due date: ${localizations.formatCompactDate(DateTime(2027, 10, 6))}',
+      ),
+      findsOneWidget,
+    );
+  });
   testWidgets(
     'matching unknown save offers status-aware return without second PUT',
     (tester) async {
@@ -407,21 +474,30 @@ void main() {
   testWidgets(
     'completed reconciliation shows saved values and waiting separately from preserved draft',
     (tester) async {
-      final org = FakeOrganization()
-        ..onSave = (_) =>
-            throw const HeapApiException('Unknown', unknownOutcome: true);
+      final org = FakeOrganization();
+      org.onGet = (_) async =>
+          TaskDetail.fromJson(detailJson(dueDate: '2026-10-06'));
+      org.onSave = (_) =>
+          throw const HeapApiException('Unknown', unknownOutcome: true);
       await openEditor(tester, org);
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const Key('editor-title')), 'My draft');
       await revealTap(tester, find.byKey(const Key('editor-save')));
-      org.onGet = (_) async => detail(
-        title: 'Completed server task',
-        status: 'completed',
-        waiting: true,
+      org.onGet = (_) async => TaskDetail.fromJson(
+        detailJson(
+          title: 'Completed server task',
+          status: 'completed',
+          dueDate: '2026-10-06',
+          waiting: true,
+        ),
       );
       await revealTap(tester, find.byKey(const Key('reload-saved-task')));
       expect(find.text('Task title: Completed server task'), findsOneWidget);
       expect(find.text('Task title: My draft'), findsOneWidget);
+      final dueDateLabel = MaterialLocalizations.of(
+        tester.element(find.byType(TaskEditorPage)),
+      ).formatCompactDate(DateTime(2026, 10, 6));
+      expect(find.text('Due date: $dueDateLabel'), findsNWidgets(2));
       expect(find.text('Awaiting external dependencies: Yes'), findsOneWidget);
       expect(find.text('Awaiting external dependencies: No'), findsOneWidget);
       expect(find.text('Project: No project'), findsNWidgets(2));
@@ -439,6 +515,9 @@ void main() {
       await openEditor(tester, org, scale: 2);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+      await tester.ensureVisible(find.byKey(const Key('editor-due-date')));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
       await tester.ensureVisible(find.byKey(const Key('editor-awaiting')));
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.byKey(const Key('editor-title')));
@@ -447,6 +526,162 @@ void main() {
       await tester.pumpAndSettle();
       await tester.ensureVisible(find.byKey(const Key('editor-save')));
       await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets('due date is draft-only, same-date no-op, and clear is guarded', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final org = FakeOrganization()
+      ..onGet = (_) async =>
+          TaskDetail.fromJson(detailJson(dueDate: '2026-10-05'));
+    await openEditor(tester, org);
+    await tester.pumpAndSettle();
+    expect(find.text('Due date: Oct 5, 2026'), findsNothing);
+    final dueDateField = tester.widget<TextFormField>(
+      find.byKey(const Key('editor-due-date')),
+    );
+    expect(dueDateField.controller!.text, contains('2026'));
+    expect(find.text('Due date'), findsOneWidget);
+    expect(org.puts, 0);
+
+    await revealTap(tester, find.byKey(const Key('editor-due-date')));
+    expect(find.byType(DatePickerDialog), findsOneWidget);
+    await tester.tap(find.text('5').first);
+    await tester.pumpAndSettle();
+    final dateSave = find.descendant(
+      of: find.byType(DatePickerDialog),
+      matching: find.text('OK'),
+    );
+    await tester.ensureVisible(dateSave);
+    await tester.pumpAndSettle();
+    await tester.tap(dateSave);
+    await tester.pumpAndSettle();
+    expect(org.puts, 0);
+    expect(find.text('Discard changes?'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('editor-clear-due-date')));
+    await tester.pumpAndSettle();
+    expect(org.puts, 0);
+    expect(find.text('Clear date'), findsNothing);
+    await tester.tap(find.byKey(const Key('editor-back')));
+    await tester.pumpAndSettle();
+    expect(find.text('Discard changes?'), findsOneWidget);
+    await tester.tap(find.text('Keep editing'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('editor-save')));
+    await tester.pumpAndSettle();
+    expect(org.lastSubmission!.draft.dueDate, isNull);
+    expect(org.lastSubmission!.toJson()['due_date'], isNull);
+  });
+  testWidgets(
+    'maximum date selection is submitted unchanged with other edits',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final org = FakeOrganization()
+        ..onGet = (_) async =>
+            TaskDetail.fromJson(detailJson(dueDate: '9999-12-31'));
+      await openEditor(tester, org);
+      await tester.pumpAndSettle();
+      await revealTap(tester, find.byKey(const Key('editor-due-date')));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(DatePickerDialog),
+          matching: find.byKey(ValueKey<DateTime>(DateTime(9999, 12, 31))).last,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final confirm = find.descendant(
+        of: find.byType(DatePickerDialog),
+        matching: find.text('OK'),
+      );
+      await tester.tap(confirm);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('editor-title')), 'Edited');
+      await revealTap(tester, find.byKey(const Key('editor-save')));
+      expect(org.lastSubmission!.toJson()['due_date'], '9999-12-31');
+      expect(org.puts, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets('Escape cancels picker, restores focus, and leaves date clean', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final org = FakeOrganization()
+      ..onGet = (_) async =>
+          TaskDetail.fromJson(detailJson(dueDate: '9999-12-31'));
+    await openEditor(tester, org);
+    await tester.pumpAndSettle();
+    await revealTap(tester, find.byKey(const Key('editor-due-date')));
+    expect(find.byType(DatePickerDialog), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byType(DatePickerDialog), findsNothing);
+    expect(
+      tester
+          .widget<TextField>(
+            find.descendant(
+              of: find.byKey(const Key('editor-due-date')),
+              matching: find.byType(TextField),
+            ),
+          )
+          .focusNode!
+          .hasFocus,
+      isTrue,
+    );
+    expect(org.puts, 0);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byKey(const Key('editor-back')));
+    await tester.pumpAndSettle();
+    expect(find.text('Open editor'), findsOneWidget);
+    expect(find.text('Discard changes?'), findsNothing);
+  });
+  testWidgets(
+    'minimum date selection is submitted unchanged with other edits',
+    (tester) async {
+      tester.view.physicalSize = const Size(1200, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final org = FakeOrganization();
+      org.onGet = (_) async =>
+          TaskDetail.fromJson(detailJson(dueDate: '0001-01-01'));
+      org.onSave = (_) =>
+          throw const HeapApiException('Unknown', unknownOutcome: true);
+      await openEditor(tester, org);
+      await tester.pumpAndSettle();
+      await revealTap(tester, find.byKey(const Key('editor-due-date')));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(DatePickerDialog),
+          matching: find.byKey(ValueKey<DateTime>(DateTime(1, 1, 1))).last,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final confirm = find.descendant(
+        of: find.byType(DatePickerDialog),
+        matching: find.text('OK'),
+      );
+      await tester.tap(confirm);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('editor-title')));
+      await tester.enterText(find.byKey(const Key('editor-title')), 'Draft');
+      await revealTap(tester, find.byKey(const Key('editor-save')));
+      await revealTap(tester, find.byKey(const Key('reload-saved-task')));
+      expect(find.textContaining('Due date:'), findsNWidgets(2));
+      expect(org.lastSubmission!.toJson()['due_date'], '0001-01-01');
+      expect(org.puts, 1);
       expect(tester.takeException(), isNull);
     },
   );

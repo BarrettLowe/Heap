@@ -22,6 +22,7 @@ TaskDetail task(
   'externally_blocked': false,
   'on_heap_since': since,
   'project_id': null,
+  'due_date': null,
 });
 
 class Service implements OrganizationService {
@@ -30,6 +31,7 @@ class Service implements OrganizationService {
   Future<TaskDetail> Function(TaskDetail, {required bool completed})? onToggle;
   int puts = 0;
   int gets = 0;
+  final localDates = <String>[];
   Future<TaskDetail> Function(String)? onGet;
   @override
   Future<TaskDetail> setCompletion(
@@ -47,8 +49,11 @@ class Service implements OrganizationService {
   }
 
   @override
-  Future<List<TaskDetail>> listOnHeap() =>
-      onList?.call() ?? Future.value(items);
+  Future<List<TaskDetail>> listOnHeap({required String localDate}) {
+    localDates.add(localDate);
+    return onList?.call() ?? Future.value(items);
+  }
+
   @override
   Future<TaskDetail> getTask(String id) {
     gets++;
@@ -61,6 +66,44 @@ class Service implements OrganizationService {
 }
 
 void main() {
+  test('each load captures the injected device-local date once', () async {
+    var now = DateTime(2026, 10, 5, 23, 59);
+    final service = Service();
+    final controller = OnHeapController(service, clock: () => now);
+    await controller.load();
+    now = DateTime(2026, 10, 6, 0, 1);
+    await controller.load();
+    expect(service.localDates, ['2026-10-05', '2026-10-06']);
+    controller.dispose();
+  });
+
+  test('load preserves the exact authoritative response order', () async {
+    final serverOrder = [
+      task(
+        'on_heap',
+        taskId: '00000000-0000-4000-8000-000000000004',
+        since: '2026-09-01T00:00:00.000000Z',
+      ),
+      task(
+        'on_heap',
+        taskId: '00000000-0000-4000-8000-000000000003',
+        since: '2026-10-03T00:00:00.000000Z',
+      ),
+      task(
+        'on_heap',
+        taskId: '00000000-0000-4000-8000-000000000002',
+        since: '2026-10-04T00:00:00.000000Z',
+      ),
+    ];
+    final controller = OnHeapController(Service()..items = serverOrder);
+    await controller.load();
+    expect(
+      controller.tasks.map((item) => item.id),
+      serverOrder.map((item) => item.id),
+    );
+    controller.dispose();
+  });
+
   test(
     'confirmed completion and undo preserve row position and task age',
     () async {
@@ -148,7 +191,7 @@ void main() {
         taskId: '00000000-0000-0000-0000-000000000003',
         since: '2026-10-02T12:34:56.123456Z',
       );
-      final service = Service()..items = [older, task('on_heap'), newer];
+      final service = Service()..items = [newer, task('on_heap'), older];
       final controller = OnHeapController(service);
       await controller.load();
       await controller.toggleCompletion(id);
@@ -162,6 +205,15 @@ void main() {
       expect(controller.tasks.map((item) => item.id), [older.id, id, newer.id]);
       expect(controller.tasks[1].onHeapSince, task('on_heap').onHeapSince);
       expect(controller.tasks[1].status, 'on_heap');
+      expect(controller.stale, isTrue);
+      service.items = [older, newer];
+      await controller.load();
+      expect(controller.tasks.map((item) => item.id), [older.id, id, newer.id]);
+      expect(controller.stale, isTrue);
+      service.items = [newer, task('on_heap'), older];
+      await controller.load();
+      expect(controller.tasks.map((item) => item.id), [newer.id, id, older.id]);
+      expect(controller.stale, isFalse);
       controller.dispose();
     },
   );
@@ -195,11 +247,17 @@ void main() {
         service.onGet = (_) async => task(completed ? 'completed' : 'on_heap');
         await controller.load();
         expect(controller.isUncertain(id), isFalse);
+        expect(controller.stale, !completed);
         expect(
           controller.tasks.map((item) => item.status),
           completed ? [] : ['on_heap'],
         );
         expect(service.puts, writes, reason: 'recovery does not repeat PUT');
+        if (!completed) {
+          service.items = [task('on_heap')];
+          await controller.load();
+          expect(controller.stale, isFalse);
+        }
         controller.dispose();
       },
     );
@@ -262,6 +320,84 @@ void main() {
     await check;
     expect(controller.tasks, isEmpty);
     expect(controller.isUncertain(id), isFalse);
+    controller.dispose();
+  });
+
+  test(
+    'recovered undo remains provisional until authoritative list contains it',
+    () async {
+      const undoId = '00000000-0000-4000-8000-000000000011';
+      final service = Service()..items = [task('on_heap', taskId: undoId)];
+      final controller = OnHeapController(service);
+      await controller.load();
+      await controller.toggleCompletion(undoId);
+      service.onToggle = (_, {required completed}) =>
+          Future.error(const HeapApiException('unknown', unknownOutcome: true));
+      await controller.toggleCompletion(undoId);
+      service.items = [];
+      service.onGet = (_) async => task('on_heap', taskId: undoId);
+      await controller.load();
+      expect(controller.tasks.single.id, undoId);
+      expect(controller.stale, isTrue);
+      await controller.load();
+      expect(controller.tasks.map((item) => item.id), [undoId]);
+      expect(controller.stale, isTrue);
+      controller.dispose();
+    },
+  );
+
+  test('project deletion clears provisional undo snapshots', () async {
+    const deletedId = '00000000-0000-4000-8000-000000000012';
+    final service = Service()..items = [task('on_heap', taskId: deletedId)];
+    final controller = OnHeapController(service);
+    await controller.load();
+    await controller.toggleCompletion(deletedId);
+    final delayedUndo = Completer<TaskDetail>();
+    service.onToggle = (_, {required completed}) => delayedUndo.future;
+    final undo = controller.toggleCompletion(deletedId);
+    controller.clearAfterProjectDeletion();
+    service.items = [];
+    await controller.load();
+    delayedUndo.complete(task('on_heap', taskId: deletedId));
+    await undo;
+    await controller.load();
+    expect(controller.tasks, isEmpty);
+    expect(controller.stale, isFalse);
+    controller.dispose();
+  });
+
+  test('confirmed completion drops provisional snapshot during uncertain-load recovery', () async {
+    const completedId = '00000000-0000-4000-8000-000000000013';
+    final service = Service()..items = [task('on_heap', taskId: completedId)];
+    final controller = OnHeapController(service);
+    await controller.load();
+    controller.applyConfirmed(task('on_heap', taskId: completedId));
+    service.onToggle = (_, {required completed}) =>
+        Future.error(const HeapApiException('unknown', unknownOutcome: true));
+    await controller.toggleCompletion(completedId);
+    service.items = [];
+    service.onGet = (_) async => task('completed', taskId: completedId);
+    await controller.load();
+    expect(controller.tasks, isEmpty);
+    await controller.load();
+    expect(controller.tasks, isEmpty);
+    controller.dispose();
+  });
+
+  test('explicit completion check drops provisional snapshot', () async {
+    const checkedId = '00000000-0000-4000-8000-000000000014';
+    final service = Service()..items = [task('on_heap', taskId: checkedId)];
+    final controller = OnHeapController(service);
+    await controller.load();
+    controller.applyConfirmed(task('on_heap', taskId: checkedId));
+    service.onToggle = (_, {required completed}) =>
+        Future.error(const HeapApiException('unknown', unknownOutcome: true));
+    await controller.toggleCompletion(checkedId);
+    service.onGet = (_) async => task('completed', taskId: checkedId);
+    await controller.checkCompletion(checkedId);
+    service.items = [];
+    await controller.load();
+    expect(controller.tasks, isEmpty);
     controller.dispose();
   });
 

@@ -93,6 +93,10 @@ class _TaskRowState extends State<TaskRow> {
     final duration = task.durationMinutes == null
         ? 'Unknown'
         : '${task.durationMinutes} min';
+    final dueDate = task.dueDate == null
+        ? null
+        : MaterialLocalizations.of(context)
+              .formatFullDate(task.dueDate!.toLocalDate());
     final narrow =
         MediaQuery.sizeOf(context).width < 360 ||
         MediaQuery.textScalerOf(context).scale(1) > 1.2;
@@ -110,7 +114,7 @@ class _TaskRowState extends State<TaskRow> {
       onTap: widget.onOpen,
       excludeSemantics: true,
       label:
-          '${task.title}. ${task.status == 'inbox' ? 'Inbox' : 'Inbox'}. ${priorityLabels[task.priority] ?? 'Unset'}. $duration. ${task.externallyBlocked ? 'Awaiting external dependencies. ' : ''}Open task editor.',
+          '${task.title}. Inbox. ${priorityLabels[task.priority] ?? 'Unset'}. $duration. ${dueDate == null ? '' : 'Due $dueDate. '}${task.externallyBlocked ? 'Awaiting external dependencies. ' : ''}Open task editor.',
       child: Column(
         children: [
           Material(
@@ -204,6 +208,8 @@ class _TaskRowState extends State<TaskRow> {
                                   ),
                                 ],
                               ),
+                              if (dueDate != null)
+                                _DueDateMetadata(date: dueDate),
                               if (task.externallyBlocked)
                                 Container(
                                   padding: const EdgeInsets.symmetric(
@@ -263,6 +269,10 @@ class _TaskRowState extends State<TaskRow> {
     final duration = task.durationMinutes == null
         ? 'Unknown'
         : '${task.durationMinutes} min';
+    final dueDate = task.dueDate == null
+        ? null
+        : MaterialLocalizations.of(context)
+              .formatFullDate(task.dueDate!.toLocalDate());
     final narrow =
         MediaQuery.sizeOf(context).width < 360 ||
         MediaQuery.textScalerOf(context).scale(1) > 1.2;
@@ -346,7 +356,7 @@ class _TaskRowState extends State<TaskRow> {
       onTap: bodyEnabled ? widget.onOpen : null,
       excludeSemantics: true,
       label:
-          '${task.title}. ${priorityLabels[task.priority] ?? 'Unset'}. $duration. ${task.externallyBlocked ? 'Awaiting external dependencies. ' : ''}${bodyEnabled ? 'Open task editor.' : ''}',
+          '${task.title}. ${priorityLabels[task.priority] ?? 'Unset'}. $duration. ${dueDate == null ? '' : 'Due $dueDate. '}${task.externallyBlocked ? 'Awaiting external dependencies. ' : ''}${bodyEnabled ? 'Open task editor.' : ''}',
       child: Material(
         color: _bodyFocused || _bodyHovered || widget.highlighted
             ? heapHighlight
@@ -405,6 +415,8 @@ class _TaskRowState extends State<TaskRow> {
                         ),
                       ],
                     ),
+                    if (dueDate != null)
+                      _DueDateMetadata(date: dueDate, neutral: neutral),
                     if (task.externallyBlocked)
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -505,6 +517,27 @@ class _TaskRowState extends State<TaskRow> {
           padding: EdgeInsets.only(left: 48, right: 12),
           child: Divider(height: 1, color: heapDivider),
         ),
+      ],
+    );
+  }
+}
+
+class _DueDateMetadata extends StatelessWidget {
+  const _DueDateMetadata({required this.date, this.neutral = false});
+  final String date;
+  final bool neutral;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = neutral ? const Color(0xFF68716C) : heapMuted;
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 6,
+      children: [
+        ExcludeSemantics(
+          child: Icon(Icons.calendar_today, size: 16, color: color),
+        ),
+        Text(date, style: TextStyle(color: color, fontSize: 14)),
       ],
     );
   }

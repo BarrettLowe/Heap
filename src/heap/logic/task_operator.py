@@ -1,11 +1,12 @@
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID, uuid4
 
 from heap.logic.duration import Duration
 from heap.logic.priority import Priority
 from heap.logic.project_store import ProjectStore
 from heap.logic.task import Task, TaskStatus
+from heap.logic.task_ranking import rank_heap_tasks
 from heap.logic.task_store import TaskStore
 
 
@@ -48,9 +49,9 @@ class TaskOperator:
         """Return inbox snapshots oldest-first, breaking timestamp ties by ID."""
         return self._store.list_inbox()
 
-    def list_on_heap(self) -> list[Task]:
-        """Return snapshots on the heap oldest-first, breaking ties by ID."""
-        return self._store.list_on_heap()
+    def list_on_heap(self, *, today: date) -> list[Task]:
+        """Return qualifying unfinished snapshots in the agreed Heap order."""
+        return rank_heap_tasks(self._store.list_on_heap(), today=today)
 
     def list_for_project(self, project_id: UUID) -> list[Task]:
         """Return all assigned task snapshots; unknown projects raise KeyError."""
@@ -192,6 +193,7 @@ class TaskOperator:
         duration: Duration,
         externally_blocked: bool,
         project_id: UUID | None = None,
+        due_date: date | None,
     ) -> Task:
         """Replace editor fields together and derive placement from requirements.
 
@@ -215,6 +217,7 @@ class TaskOperator:
                 duration=duration,
                 externally_blocked=externally_blocked,
                 project_id=project_id,
+                due_date=due_date,
             ),
         )
 
@@ -251,7 +254,7 @@ class TaskOperator:
         now = current_time()
         if needs_entry_time:
             edited.on_heap_since = now
-        edited.updated_at = now
+        edited.updated_at = max(now, original.updated_at + timedelta(microseconds=1))
         self._store.save(edited)
         return edited
 

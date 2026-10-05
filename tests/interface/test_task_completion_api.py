@@ -52,6 +52,7 @@ def test_completion_and_undo_keep_task_history_and_unrelated_fields(
         organization = {
             "title": "Repair fence", "priority": 2, "duration_minutes": 30,
             "externally_blocked": True, "project_id": project["id"],
+            "due_date": None,
             "expected_updated_at": detail["updated_at"],
         }
         heap_task = client.put(path + "/organization", json=organization).json()
@@ -112,6 +113,7 @@ def test_completion_noop_requires_current_token_and_stale_token_conflicts(
         setup = {
             "title": task["title"], "priority": 2, "duration_minutes": 30,
             "externally_blocked": False, "project_id": None,
+            "due_date": None,
             "expected_updated_at": task["updated_at"],
         }
         heap_task = client.put(path + "/organization", json=setup).json()
@@ -190,6 +192,7 @@ def test_completion_storage_failure_returns_error_without_changing_task(
         setup = {
             "title": task["title"], "priority": 2, "duration_minutes": 30,
             "externally_blocked": False, "project_id": None,
+            "due_date": None,
             "expected_updated_at": task["updated_at"],
         }
         heap_task = client.put(path + "/organization", json=setup).json()
@@ -226,6 +229,7 @@ def test_completion_advances_token_despite_equal_or_backward_clock(
                 "duration_minutes": 30,
                 "externally_blocked": False,
                 "project_id": None,
+                "due_date": None,
                 "expected_updated_at": captured["updated_at"],
             },
         )

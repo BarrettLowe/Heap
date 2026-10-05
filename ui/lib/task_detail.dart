@@ -1,3 +1,4 @@
+import 'calendar_date.dart';
 import 'inbox_task.dart';
 export 'inbox_task.dart' show priorityLabels, durationChoices;
 
@@ -14,6 +15,7 @@ class TaskDetail extends InboxTask {
     required super.externallyBlocked,
     required this.onHeapSince,
     required this.projectId,
+    super.dueDate,
   });
   final String updatedAtToken;
   final DateTime? onHeapSince;
@@ -61,6 +63,7 @@ class TaskDetail extends InboxTask {
       externallyBlocked: base.externallyBlocked,
       onHeapSince: timestamp,
       projectId: projectId as String?,
+      dueDate: base.dueDate,
     );
   }
 }
@@ -72,6 +75,7 @@ class OrganizationDraft {
     this.durationMinutes,
     required this.externallyBlocked,
     required this.projectId,
+    this.dueDate,
   });
   factory OrganizationDraft.fromTask(TaskDetail task) => OrganizationDraft(
     title: task.title,
@@ -79,18 +83,21 @@ class OrganizationDraft {
     durationMinutes: task.durationMinutes,
     externallyBlocked: task.externallyBlocked,
     projectId: task.projectId,
+    dueDate: task.dueDate,
   );
   final String title;
   final int? priority;
   final int? durationMinutes;
   final bool externallyBlocked;
   final String? projectId;
+  final CalendarDate? dueDate;
   bool sameFields(OrganizationDraft other) =>
       title == other.title &&
       priority == other.priority &&
       durationMinutes == other.durationMinutes &&
       externallyBlocked == other.externallyBlocked &&
-      projectId == other.projectId;
+      projectId == other.projectId &&
+      dueDate == other.dueDate;
 }
 
 class OrganizationSubmission {
@@ -107,6 +114,7 @@ class OrganizationSubmission {
     'duration_minutes': draft.durationMinutes,
     'externally_blocked': draft.externallyBlocked,
     'project_id': draft.projectId,
+    'due_date': draft.dueDate?.toString(),
     'expected_updated_at': original.updatedAtToken,
   };
   bool matches(TaskDetail task) =>
@@ -116,5 +124,6 @@ class OrganizationSubmission {
       task.durationMinutes == draft.durationMinutes &&
       task.externallyBlocked == draft.externallyBlocked &&
       task.status == expectedStatus &&
-      task.projectId == draft.projectId;
+      task.projectId == draft.projectId &&
+      task.dueDate == draft.dueDate;
 }

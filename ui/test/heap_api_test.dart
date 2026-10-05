@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:heap_app/heap_api.dart';
 import 'package:http/http.dart' as http;
@@ -17,6 +18,7 @@ void main() {
     'duration_minutes': null,
     'externally_blocked': false,
     'project_id': null,
+    'due_date': null,
   };
 
   test('GET uses the contract path and parses immutable inbox tasks', () async {
@@ -40,6 +42,36 @@ void main() {
     client.close();
   });
 
+  test(
+    'inbox transport failure logs details but keeps a generic error',
+    () async {
+      final messages = <String?>[];
+      final originalDebugPrint = debugPrint;
+      debugPrint = (String? message, {int? wrapWidth}) => messages.add(message);
+      addTearDown(() => debugPrint = originalDebugPrint);
+
+      final transportError = http.ClientException('TLS handshake failed');
+      final client = MockClient((_) async => throw transportError);
+      addTearDown(client.close);
+      final api = HeapApi(
+        client: client,
+        baseUri: Uri.parse('https://server.test'),
+      );
+
+      await expectLater(
+        api.listInbox(),
+        throwsA(
+          isA<HeapApiException>().having(
+            (error) => error.message,
+            'message',
+            'Could not reach the server.',
+          ),
+        ),
+      );
+      expect(messages, ['HeapApi.listInbox failed: $transportError']);
+    },
+  );
+
   test('POST sends trimmed title as JSON and parses the saved task', () async {
     final client = MockClient((request) async {
       expect(request.method, 'POST');
@@ -53,6 +85,7 @@ void main() {
             'duration_minutes',
             'externally_blocked',
             'project_id',
+            'due_date',
           }.contains(key),
         );
       return http.Response(jsonEncode(captureJson), 201);

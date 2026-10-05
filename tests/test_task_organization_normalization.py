@@ -80,7 +80,7 @@ def test_startup_normalizes_legacy_ready_inbox_atomically_before_health(
     monkeypatch.setattr(SQLiteTaskStore, "save_many", record_batch)
     with TestClient(create_app(database, [])) as client:
         assert client.get("/healthz").json() == {"status": "ok"}
-        on_heap = client.get("/api/v1/heap").json()["items"]
+        on_heap = client.get("/api/v1/heap", params={"local_date": "2026-10-05"}).json()["items"]
         assert len(on_heap) == 3
         by_id = {item["id"]: item for item in on_heap}
         for legacy in before[:2]:

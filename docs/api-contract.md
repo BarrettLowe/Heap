@@ -1,12 +1,20 @@
 # Heap HTTP contract
 
-**Approved revision:** automatic organization, manual external waiting, and retained time-on-deck tracking. Barrett approved implementation after planning. This replaces the prior explicit-move contract. No ranking engine or hidden-task feature is added.
+**Approved revision:** automatic organization, manual external waiting, and retained time-on-deck tracking. Barrett approved implementation after planning. This replaces the prior explicit-move contract. The approved full-Heap ranking and due-date contract is specified below; no hidden-task feature is added.
 
 Python owns rules and durable storage. Flutter is server-backed: no disk task cache, queued writes, automatic write retries, or offline synchronization. Contract changes remain coordinator-owned.
 
 ## Heap completion addition
 
 The current completion route and naming are documented in [task-completion-plan.md](task-completion-plan.md): `PUT /api/v1/tasks/{task_id}/completion` sets or undoes completion with a comparison token. This is an explicit exception to the older terminal-completion policy below: organization still rejects completed tasks, but completion undo can restore a qualifying Heap task with its original age. Current code uses `on_heap`, `on_heap_since`, and `/api/v1/heap` rather than the historical On-deck transport names in this document.
+
+## Heap ranking and due dates (approved contract)
+
+`GET /api/v1/heap` requires `local_date` as a query parameter in canonical real-calendar `YYYY-MM-DD` form. Missing, malformed, or noncanonical values return `422 invalid_request`; the server never substitutes its own date. Example: `GET /api/v1/heap?local_date=2026-10-05`. The device supplies its current local calendar date on every list load.
+
+`Task.due_date` is `datetime.date | None`. JSON `due_date` is required and nullable on Inbox, detail, Heap, and project-task task objects, and on full organization PUT requests. Non-null values are canonical `YYYY-MM-DD` strings only; timestamps, non-strings, invalid dates, and missing required fields are rejected. Title-only capture remains unchanged and creates a task with no due date. Completion/detail responses include `due_date`.
+
+Heap ordering is authoritative in Python, using `rank_heap_tasks(tasks: Sequence[Task], *, today: date) -> list[Task]` in `src/heap/logic/task_ranking.py`. `TaskOperator.list_on_heap(*, today: date) -> list[Task]` supplies qualifying unfinished task snapshots to that pure ranker. P1 stays group 1. P2 is group 2; P3 due on/before tomorrow promotes to group 2; P4 due on/before tomorrow promotes to group 3; P5 due on/before tomorrow promotes to group 4; all other non-P1 tasks retain their priority group. A date is urgent when it is on or before `today + 1 day`, including overdue dates. Within each group, sort due date ascending, null last, then `on_heap_since` ascending, then ID ascending. Waiting does not change ranking. Shared fixture: [heap-ranking-fixture.json](heap-ranking-fixture.json).
 
 ## Routes
 
@@ -17,6 +25,7 @@ Use these exact paths without trailing slashes. JSON uses UTF-8. There are no cr
 | `GET /healthz` | None | `200 {"status":"ok"}` after initialization and normalization |
 | `POST /api/v1/tasks` | `{"title":"Fix driveway washout"}` | `201 CaptureTask`, after persistence |
 | `GET /api/v1/inbox` | None | `200 {"items":[InboxTask,...]}` |
+| `GET /api/v1/heap?local_date=YYYY-MM-DD` | Required canonical local calendar date | `200 {"items":[TaskDetail,...]}` in ranked order |
 | `GET /api/v1/tasks/{task_id}` | None | `200 TaskDetail` |
 | `GET /api/v1/on-deck` | None | `200 {"items":[TaskDetail,...]}` |
 | `PUT /api/v1/tasks/{task_id}/organization` | Full editor fields and comparison token | `200 TaskDetail`, after persistence or confirmed no-op |
@@ -41,7 +50,7 @@ Capture remains title-only. Require a strict string, trim surrounding whitespace
 
 Creation guarantees unset priority, unknown duration, and `externally_blocked=false`. Creation timestamps are equal. These defaults apply to confirmed title-only creation, not arbitrary missing list metadata.
 
-`InboxTask` returned by the bulk GET adds 3 required fields to the original 5:
+`InboxTask` returned by the bulk GET adds required organization, waiting, project, and due-date fields to the original 5:
 
 ```json
 {
@@ -52,7 +61,9 @@ Creation guarantees unset priority, unknown duration, and `externally_blocked=fa
   "updated_at": "2026-10-03T12:34:56.123456Z",
   "priority": 2,
   "duration_minutes": null,
-  "externally_blocked": true
+  "externally_blocked": true,
+  "project_id": null,
+  "due_date": "2026-10-06"
 }
 ```
 
@@ -60,7 +71,7 @@ Inbox contains unfinished tasks missing priority or known duration. Order remain
 
 ## Detail and On-deck
 
-`TaskDetail` has these 9 fields:
+`TaskDetail` contains these task fields (including the required nullable `due_date`):
 
 ```json
 {
@@ -72,7 +83,9 @@ Inbox contains unfinished tasks missing priority or known duration. Order remain
   "priority": 2,
   "duration_minutes": 30,
   "on_deck_since": "2026-10-04T09:00:00.123456Z",
-  "externally_blocked": true
+  "externally_blocked": true,
+  "project_id": null,
+  "due_date": "2026-10-06"
 }
 ```
 
@@ -80,13 +93,14 @@ Inbox contains unfinished tasks missing priority or known duration. Order remain
 - Priority: null or strict integer 1–5. Labels: P1 Critical, P2 Important, P3 Normal, P4 Someday, P5 Maybe. P1 is highest.
 - Duration: null (Unknown) or strict integer minutes 5/15/30/60/120/240.
 - Waiting: required strict boolean `externally_blocked`, manually edited only. No hiding field, reason text, or automatic updates.
+- `due_date`: required canonical `YYYY-MM-DD` string or null.
 - `on_deck_since`: canonical UTC or null; On-deck requires a timestamp. Completed tasks may retain an earlier timestamp.
 
-On-deck membership is qualifying unfinished work: priority assigned and duration known. It is not a separate manual flag/action. Both waiting and prerequisite-blocked tasks remain in this organized pool, with waiting clearly marked. This is not an actionable-only recommendation view or ranking. List order remains ascending `on_deck_since`, then ID. Queries should express qualification rather than rely on an independently editable membership choice; persisted lifecycle snapshots may remain an internal representation maintained by operations. Inbox and On-deck must partition unfinished tasks consistently.
+On-deck membership is qualifying unfinished work: priority assigned and duration known. It is not a separate manual flag/action. Both waiting and prerequisite-blocked tasks remain in this organized pool, with waiting clearly marked. This is not an actionable-only recommendation view or ranking. Heap order follows the Python ranking contract above. Queries should express qualification rather than rely on an independently editable membership choice; persisted lifecycle snapshots may remain an internal representation maintained by operations. Inbox and On-deck must partition unfinished tasks consistently.
 
 ## One atomic organization Save
 
-PUT requires all 5 fields:
+PUT requires all existing organization fields plus required nullable `due_date`:
 
 ```json
 {
@@ -94,11 +108,13 @@ PUT requires all 5 fields:
   "priority": 2,
   "duration_minutes": 30,
   "externally_blocked": true,
+  "project_id": null,
+  "due_date": null,
   "expected_updated_at": "2026-10-03T12:34:56.123456Z"
 }
 ```
 
-Missing priority/duration is invalid; explicit null clears them. Waiting is required, never nullable/default-false. Load it from fresh detail and submit the draft value. Reject booleans/floats/numeric strings for integers, unsupported enum values, malformed tokens, invalid titles, and extra fields. **`move_to_on_deck` is removed; any supplied value, including false, is an extra field and produces 422.** Missing organization requirements are valid saves to Inbox, not validation failures.
+Missing priority/duration/due_date is invalid; explicit null clears them. Due date accepts only a canonical real `YYYY-MM-DD` string or null. Waiting is required, never nullable/default-false. Load it from fresh detail and submit the draft value. Reject booleans/floats/numeric strings for integers, unsupported enum values, malformed tokens, invalid titles, and extra fields. **`move_to_on_deck` is removed; any supplied value, including false, is an extra field and produces 422.** Missing organization requirements are valid saves to Inbox, not validation failures.
 
 Check fresh missing/completed/stale state and apply the complete operation inside the existing serialized boundary:
 

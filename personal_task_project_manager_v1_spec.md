@@ -304,9 +304,13 @@ into smaller tasks.
 
 ### Due Date
 
-Optional.
+Optional calendar date, with no time-of-day. The agreed first ranking change
+adds a date-only Due date field to the task editor, backed by persisted task
+metadata and the API. Leaving it blank or clearing it is valid. Interpret the
+date against the viewing device's current local calendar date for ranking.
 
-A missing due date should not negatively affect a task.
+Undated tasks participate normally; within the same ranking level, dated tasks
+precede undated tasks under the agreed ordering rule.
 
 ### Created Timestamp
 
@@ -667,6 +671,16 @@ this when implementing project-completion behavior.
 
 The application has two fundamentally different task-viewing modes.
 
+## Current Heap ranking scope
+
+Agreed first implementation: show the full organized Heap in ranked order,
+without project caps, diversification, or a smaller recommendation shortlist.
+Do not hide tasks merely because their project already has higher-ranked tasks.
+The recommendation and project-diversification design below remains future work,
+not part of this first ranking change. Tasks awaiting external dependencies
+remain visible and use the same ranking rules; retain their existing badge.
+The manual waiting flag must not hide or demote them.
+
 ## Global Ranked View
 
 Purpose:
@@ -704,6 +718,12 @@ This view answers:
 ------------------------------------------------------------------------
 
 # 14. Ranking Pipeline
+
+The agreed first Heap ranking uses ordered groups and date/age tie-breakers,
+not numeric weights or additive age bonuses. Implementation tasks and approved
+HTTP/UI details are in `docs/heap-ranking-plan.md`; implementation is in progress.
+This agreement supersedes conflicting provisional score/curve suggestions below
+for the current full-Heap view. Future recommendation policies remain separate.
 
 Ranking should be deterministic.
 
@@ -809,6 +829,25 @@ Conceptually:
 This should allow a lower-priority task with a genuinely imminent
 deadline to outrank a higher-priority task without a deadline.
 
+Agreed ranking example: a P3 task due tomorrow outranks an undated P2 task.
+Priority is therefore not a strict grouping that urgency can never cross.
+Due-date urgency may cross at most 1 priority level, except that P1 Critical
+is protected: P1 tasks always rank ahead of lower-priority tasks. A P3 task
+due tomorrow outranks an undated P2, but not P1; even P2 due tomorrow cannot
+outrank P1. Ranking does not change the task's saved priority.
+
+The agreed upcoming-deadline promotion window is 2 calendar dates: today or
+tomorrow, not a rolling 48-hour window. Dates after tomorrow do not earn the
+1-level promotion. Overdue tasks retain the same 1-level promotion until
+completed or rescheduled; becoming further overdue adds no extra promotion.
+P1 remains protected. Interpret today and tomorrow in Barrett's local
+timezone, not the server's timezone. Use the viewing device's current timezone,
+following timezone changes when traveling rather than fixing a home timezone.
+
+Within the same ranking level, sort earliest due date first, placing undated
+tasks after dated tasks, then oldest-on-Heap first. P1 remains ahead of every
+lower-priority task. The final deterministic tie-breaker remains to be settled.
+
 However, distant dates must not dominate manual priority.
 
 This is intentionally designed to avoid reproducing conventional
@@ -826,6 +865,11 @@ Measure task age and staleness from `on_deck_since`, not creation or the last
 meaningful update.
 
 An older task should gradually receive more visibility.
+
+Agreed limit: age may reorder tasks within the same priority level, but must
+not lift a task across priority levels. An old P3 does not outrank a new,
+undated P2 merely because of age. Age must not compound a due-date promotion
+into crossing additional levels.
 
 However:
 

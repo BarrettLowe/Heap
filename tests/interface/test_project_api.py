@@ -70,6 +70,7 @@ def test_project_crud_and_full_task_view_round_trip(
                 "duration_minutes": 30,
                 "externally_blocked": False,
                 "project_id": project["id"],
+                "due_date": None,
                 "expected_updated_at": captured["updated_at"],
             },
         )
@@ -81,7 +82,7 @@ def test_project_crud_and_full_task_view_round_trip(
             "items": [task]
         }
         assert (
-            client.get("/api/v1/heap").json()["items"][0]["project_id"] == project["id"]
+            client.get("/api/v1/heap", params={"local_date": "2026-10-05"}).json()["items"][0]["project_id"] == project["id"]
         )
         assert client.get("/api/v1/inbox").json() == {"items": []}
 
@@ -135,6 +136,7 @@ def test_project_delete_removes_assigned_tasks_and_dependencies_atomically(
                     "duration_minutes": None,
                     "externally_blocked": False,
                     "project_id": project_id,
+                    "due_date": None,
                     "expected_updated_at": task["updated_at"],
                 },
             )

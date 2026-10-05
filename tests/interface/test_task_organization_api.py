@@ -44,6 +44,7 @@ def organization_body(
         "duration_minutes": duration,
         "externally_blocked": waiting,
         "project_id": None,
+        "due_date": None,
         "expected_updated_at": updated_at,
     }
 
@@ -66,10 +67,11 @@ def test_detail_lists_and_atomic_save_return_exact_snapshots(
             "duration_minutes": None,
             "externally_blocked": False,
             "project_id": None,
+            "due_date": None,
         }
         assert client.get("/api/v1/inbox").json() == {"items": [inbox_item]}
         assert client.get(path).json() == {**inbox_item, "on_heap_since": None}
-        assert client.get("/api/v1/heap").json() == {"items": []}
+        assert client.get("/api/v1/heap", params={"local_date": "2026-10-05"}).json() == {"items": []}
         monkeypatch.setattr(task_operator, "current_time", lambda: LATER)
         response = client.put(
             path + "/organization",
@@ -85,10 +87,11 @@ def test_detail_lists_and_atomic_save_return_exact_snapshots(
             "duration_minutes": 30,
             "externally_blocked": True,
             "project_id": None,
+            "due_date": None,
             "on_heap_since": "2026-10-04T09:00:00.123456Z",
         }
         assert client.get(path).json() == saved
-        assert client.get("/api/v1/heap").json() == {"items": [saved]}
+        assert client.get("/api/v1/heap", params={"local_date": "2026-10-05"}).json() == {"items": [saved]}
         assert client.get("/api/v1/inbox").json() == {"items": []}
 
 
@@ -127,7 +130,7 @@ def test_heap_api_names_preserve_existing_database_format_after_restart(
 
     with client_for(database) as client:
         assert client.get(path).json() == saved
-        assert client.get("/api/v1/heap").json() == {"items": [saved]}
+        assert client.get("/api/v1/heap", params={"local_date": "2026-10-05"}).json() == {"items": [saved]}
         assert client.get("/api/v1/inbox").json() == {"items": []}
         unchanged = client.put(
             path + "/organization",
@@ -571,4 +574,39 @@ def test_competing_puts_compare_tokens_inside_whole_operation_lock(
         with ThreadPoolExecutor(max_workers=2) as executor:
             statuses = list(executor.map(save, ["First", "Second"]))
         assert sorted(statuses) == [200, 409]
-        assert len(client.get("/api/v1/heap").json()["items"]) == 1
+        assert len(client.get("/api/v1/heap", params={"local_date": "2026-10-05"}).json()["items"]) == 1
+
+@pytest.mark.parametrize("due_date", ["2026-02-29", "2026-2-03", "2026-01-01T00:00:00Z", 123, True])
+def test_organization_rejects_noncanonical_due_dates(
+    tmp_path: Path, monkeypatch: MonkeyPatch, due_date: object
+) -> None:
+    """Reject malformed, impossible, timestamp, and non-string due dates."""
+    monkeypatch.setattr(task_operator, "current_time", lambda: NOW)
+    with client_for(tmp_path / "heap.sqlite") as client:
+        captured = client.post("/api/v1/tasks", json={"title": "Repair"}).json()
+        body = organization_body(captured["updated_at"])
+        body["due_date"] = due_date
+        response = client.put(f"/api/v1/tasks/{captured['id']}/organization", json=body)
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "invalid_request"
+
+
+def test_due_date_is_required_nullable_and_round_trips_through_task_responses(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Date-only edits serialize consistently, and explicit null clears the date."""
+    monkeypatch.setattr(task_operator, "current_time", lambda: NOW)
+    with client_for(tmp_path / "heap.sqlite") as client:
+        captured = client.post("/api/v1/tasks", json={"title": "Repair"}).json()
+        path = f"/api/v1/tasks/{captured['id']}"
+        initial = organization_body(captured["updated_at"])
+        del initial["due_date"]
+        assert client.put(path + "/organization", json=initial).status_code == 422
+        initial["due_date"] = "2028-02-29"
+        saved = client.put(path + "/organization", json=initial).json()
+        assert saved["due_date"] == "2028-02-29"
+        assert client.get(path).json()["due_date"] == "2028-02-29"
+        assert client.get("/api/v1/heap", params={"local_date": "2026-10-05"}).json()["items"][0]["due_date"] == "2028-02-29"
+        cleared_body = organization_body(saved["updated_at"])
+        cleared = client.put(path + "/organization", json=cleared_body).json()
+        assert cleared["due_date"] is None

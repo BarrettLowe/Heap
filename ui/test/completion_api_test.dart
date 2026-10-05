@@ -19,6 +19,7 @@ Map<String, Object?> taskJson(String status) => {
   'duration_minutes': 30,
   'externally_blocked': true,
   'project_id': null,
+  'due_date': null,
   'on_heap_since': token,
 };
 
@@ -60,6 +61,10 @@ void main() {
         http.Response(jsonEncode(taskJson('on_heap')), 200),
         http.Response(
           jsonEncode({...taskJson('completed'), 'title': 'Changed'}),
+          200,
+        ),
+        http.Response(
+          jsonEncode({...taskJson('completed'), 'due_date': '2026-10-05'}),
           200,
         ),
         http.Response('server error', 500),
