@@ -413,27 +413,29 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
       const SizedBox(height: 16),
       LayoutBuilder(
         builder: (context, constraints) {
-          final priority = _dropdown(
-            'Priority',
-            'editor-priority',
-            draft.priority ?? 0,
-            {0: 'Unset', ...priorityLabels},
-            controller.fieldErrors['priority'],
-            (value) => controller.edit(
+          final priority = _selectionGroup(
+            label: 'Priority',
+            key: 'editor-priority',
+            focusNode: _priorityFocus,
+            value: draft.priority ?? 0,
+            options: {0: 'Unset', ...priorityLabels},
+            error: controller.fieldErrors['priority'],
+            changed: (value) => controller.edit(
               priority: value == 0 ? null : value,
               setPriority: true,
             ),
           );
-          final duration = _dropdown(
-            'Duration',
-            'editor-duration',
-            draft.durationMinutes ?? 0,
-            {
+          final duration = _selectionGroup(
+            label: 'Duration',
+            key: 'editor-duration',
+            focusNode: _durationFocus,
+            value: draft.durationMinutes ?? 0,
+            options: {
               0: 'Unknown',
-              for (final value in durationChoices) value: '$value min',
+              for (final value in durationChoices) value: formatDuration(value),
             },
-            controller.fieldErrors['duration_minutes'],
-            (value) => controller.edit(
+            error: controller.fieldErrors['duration_minutes'],
+            changed: (value) => controller.edit(
               durationMinutes: value == 0 ? null : value,
               setDuration: true,
             ),
@@ -607,42 +609,54 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
     ],
   );
 
-  Widget _dropdown(
-    String label,
-    String key,
-    int value,
-    Map<int, String> options,
-    String? error,
-    ValueChanged<int?> changed,
-  ) => KeyedSubtree(
+  Widget _selectionGroup({
+    required String label,
+    required String key,
+    required FocusNode focusNode,
+    required int value,
+    required Map<int, String> options,
+    required String? error,
+    required ValueChanged<int> changed,
+  }) => Focus(
     key: Key(key),
-    child: DropdownButtonFormField<int>(
-      key: ValueKey('$key-$value'),
-      initialValue: value,
-      focusNode: key == 'editor-priority' ? _priorityFocus : _durationFocus,
-      isExpanded: true,
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-        errorText: error,
-      ),
-      items: [
-        for (final option in options.entries)
-          DropdownMenuItem(
-            value: option.key,
-            child: label == 'Priority'
-                ? PriorityPill(priority: option.key == 0 ? null : option.key)
-                : Row(
-                    children: [
-                      const Icon(Icons.schedule, size: 18, color: heapMuted),
-                      const SizedBox(width: 8),
-                      Flexible(child: Text(option.value)),
-                    ],
-                  ),
+    focusNode: focusNode,
+    child: Semantics(
+      label: label,
+      container: true,
+      explicitChildNodes: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              for (final option in options.entries)
+                ChoiceChip(
+                  key: Key('$key-${option.key}'),
+                  label: Text(option.value),
+                  selected: value == option.key,
+                  onSelected: _controller.editable
+                      ? (_) {
+                          FocusManager.instance.primaryFocus?.unfocus();
+                          changed(option.key);
+                        }
+                      : null,
+                ),
+            ],
           ),
-      ],
-      onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-      onChanged: _controller.editable ? changed : null,
+          if (error != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 12, top: 4),
+              child: Text(
+                error,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+        ],
+      ),
     ),
   );
 
@@ -734,7 +748,7 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
       Text('Project: ${_projectName(draft.projectId)}'),
       Text('Priority: ${priorityLabels[draft.priority] ?? 'Unset'}'),
       Text(
-        'Duration: ${draft.durationMinutes == null ? 'Unknown' : '${draft.durationMinutes} min'}',
+        'Duration: ${draft.durationMinutes == null ? 'Unknown' : formatDuration(draft.durationMinutes!)}',
       ),
       Text('Due date: ${_dueDateLabel(draft.dueDate)}'),
       Text(

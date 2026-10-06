@@ -25,12 +25,12 @@ class HeapFilterPills extends StatelessWidget {
         value: filter.minimumMinutes,
         label: filter.minimumMinutes == null
             ? 'Time'
-            : 'Time: ≥${filter.minimumMinutes}m',
+            : 'Time: ≥${formatDuration(filter.minimumMinutes!)}',
         accessibleLabel: filter.minimumMinutes == null
             ? 'Time filter, any duration'
-            : 'Time filter, at least ${filter.minimumMinutes} minutes',
+            : 'Time filter, at least ${formatDuration(filter.minimumMinutes!)}',
         choices: durationChoices,
-        option: (minutes) => Text('At least $minutes min'),
+        option: (minutes) => Text('At least ${formatDuration(minutes)}'),
         changed: (value) => onChanged(HeapFilter.time(value)),
       ),
       _picker(

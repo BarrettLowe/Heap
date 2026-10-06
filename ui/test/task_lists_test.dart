@@ -37,14 +37,20 @@ Future<void> host(
 }
 
 Future<void> duration30(WidgetTester tester) async {
-  await tester.ensureVisible(find.byKey(const Key('editor-duration')));
-  await tester.tap(find.byKey(const Key('editor-duration')));
-  await tester.pumpAndSettle();
-  await tester.tap(find.text('30 min').last);
+  final choice = find.byKey(const Key('editor-duration-30'));
+  await tester.ensureVisible(choice);
+  await tester.tap(choice);
   await tester.pumpAndSettle();
 }
 
 void main() {
+  test('duration labels use hours where appropriate', () {
+    expect(formatDuration(30), '30 min');
+    expect(formatDuration(60), '1 hour');
+    expect(formatDuration(90), '1 hour 30 min');
+    expect(formatDuration(120), '2 hours');
+  });
+
   testWidgets(
     'narrow 2x rows/selector/toolbar and wide capped lists remain scrollable',
     (tester) async {
@@ -294,9 +300,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Existing task'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('editor-priority')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Unset').last);
+      await tester.tap(find.byKey(const Key('editor-priority-0')));
       await tester.pumpAndSettle();
       expect(
         find.text('Saving will return this task to the inbox.'),
@@ -307,9 +311,7 @@ void main() {
       expect(remote.status, 'inbox');
       await tester.tap(find.text('Existing task'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('editor-priority')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('P2 Important').last);
+      await tester.tap(find.byKey(const Key('editor-priority-2')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('editor-save')));
       await tester.pumpAndSettle();

@@ -1,6 +1,6 @@
 import 'calendar_date.dart';
 import 'inbox_task.dart';
-export 'inbox_task.dart' show priorityLabels, durationChoices;
+export 'inbox_task.dart' show priorityLabels, durationChoices, formatDuration;
 
 class TaskDetail extends InboxTask {
   const TaskDetail({

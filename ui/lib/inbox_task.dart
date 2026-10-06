@@ -9,6 +9,16 @@ const priorityLabels = <int, String>{
 };
 const durationChoices = <int>[5, 15, 30, 60, 120, 240];
 
+String formatDuration(int minutes) {
+  if (minutes >= 60) {
+    final hours = minutes ~/ 60;
+    final remainder = minutes % 60;
+    final hourLabel = '$hours ${hours == 1 ? 'hour' : 'hours'}';
+    return remainder == 0 ? hourLabel : '$hourLabel $remainder min';
+  }
+  return '$minutes min';
+}
+
 class InboxTask {
   static final _uuidPattern = RegExp(
     r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
