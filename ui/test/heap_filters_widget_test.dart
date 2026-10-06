@@ -87,7 +87,7 @@ void main() {
       ]);
       await pick(tester, 'time', 30);
       expect(visibleTitles(tester), ['Long waiting task', 'Boundary task']);
-      expect(find.text('Time: ≥30m'), findsOneWidget);
+      expect(find.text('Time: ≥30 min'), findsOneWidget);
       expect(find.text('Priority'), findsOneWidget);
       expect(
         tester
@@ -126,7 +126,7 @@ void main() {
       expect(find.byKey(const Key('priority-filter-5')), findsOneWidget);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
-      expect(find.text('Time: ≥30m'), findsOneWidget);
+      expect(find.text('Time: ≥30 min'), findsOneWidget);
       expect(visibleTitles(tester), ['Long waiting task', 'Boundary task']);
       await pick(tester, 'time', 0);
       expect(visibleTitles(tester).length, 3);
@@ -150,18 +150,18 @@ void main() {
       expect(find.byKey(const Key('time-filter')), findsNothing);
       await tester.tap(find.byKey(const Key('on-heap-tab')));
       await tester.pumpAndSettle();
-      expect(find.text('Time: ≥30m'), findsOneWidget);
+      expect(find.text('Time: ≥30 min'), findsOneWidget);
       await tester.ensureVisible(find.text('Long waiting task'));
       await tester.tap(find.text('Long waiting task'));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Cancel editing'));
       await tester.pumpAndSettle();
-      expect(find.text('Time: ≥30m'), findsOneWidget);
+      expect(find.text('Time: ≥30 min'), findsOneWidget);
       org.onList = () async => [sampleTasks().last];
       await tester.tap(find.byKey(const Key('refresh')));
       await tester.pumpAndSettle();
       expect(visibleTitles(tester), ['Boundary task']);
-      expect(find.text('Time: ≥30m'), findsOneWidget);
+      expect(find.text('Time: ≥30 min'), findsOneWidget);
       expect(org.lists, 2);
       await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(
@@ -177,7 +177,7 @@ void main() {
       await tester.tap(find.byKey(const Key('on-heap-tab')));
       await tester.pumpAndSettle();
       expect(find.text('Time'), findsOneWidget);
-      expect(find.text('Time: ≥30m'), findsNothing);
+      expect(find.text('Time: ≥30 min'), findsNothing);
     },
   );
 
@@ -258,9 +258,7 @@ void main() {
       await tester.ensureVisible(find.text('Saved filtered task'));
       await tester.tap(find.text('Saved filtered task'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('editor-duration')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('5 min').last);
+      await tester.tap(find.byKey(const Key('editor-duration-5')));
       await tester.pumpAndSettle();
       final delayed = Completer<List<TaskDetail>>();
       org.onList = () => delayed.future;
@@ -272,7 +270,7 @@ void main() {
         find.text('Task saved to the heap. Hidden by the current filter.'),
         findsOneWidget,
       );
-      expect(find.text('Time: ≥30m'), findsOneWidget);
+      expect(find.text('Time: ≥30 min'), findsOneWidget);
       expect(find.text('No tasks match this filter'), findsOneWidget);
       expect(visibleTitles(tester), isEmpty);
       final heading = tester.widget<Focus>(
@@ -286,7 +284,7 @@ void main() {
       expect(heading.focusNode!.hasFocus, true);
       delayed.complete([remote]);
       await tester.pumpAndSettle();
-      expect(find.text('Time: ≥30m'), findsOneWidget);
+      expect(find.text('Time: ≥30 min'), findsOneWidget);
       expect(heading.focusNode!.hasFocus, true);
       await pick(tester, 'priority', 2);
       expect(find.text('Priority: P2'), findsOneWidget);
@@ -315,7 +313,7 @@ void main() {
           expect(
             tester.getSemantics(find.byKey(const Key('time-filter'))),
             isSemantics(
-              label: 'Time filter, at least 30 minutes',
+              label: 'Time filter, at least 30 min',
               isSelected: true,
               isButton: true,
               hasTapAction: true,

@@ -427,3 +427,40 @@ Implementation and V1 are complete. V2 remains partial only for the listed devic
 The regression failed before the fix. Search now uses Flutter's normal text
 input instead of switching from `TextInputType.none` and manually showing the
 keyboard. No device is connected; no APK deployment was performed.
+
+## 26. Task editor selection pills
+
+- [x] Replace priority and duration dropdowns with inline selectable pills, retaining the existing choices and nullable values.
+- [x] Pass Flutter analysis and the full widget suite.
+- [ ] Verify the editor on an emulator.
+- [x] Verify the editor on a physical phone.
+
+Priority and duration remain draft-only until Save. Analysis reports no issues;
+all 208 Flutter tests pass. Built and launched the release app on Barrett's Pixel 6 Pro;
+verified the editor pills display and priority selection updates the draft. Discarded
+the draft without saving. No emulator was running for this check.
+
+## 27. Duration labels in hours
+
+- [x] Show durations of 60 minutes or more in hours across task rows, the editor, filter choices, filter labels, and accessibility text.
+- [x] Verify Flutter analysis and widget tests.
+- [ ] Verify duration labels visually on the phone.
+
+Storage and filtering continue to use minutes. Tests cover minute/hour formatting;
+phone visual verification remains pending.
+
+## 28. App icon integration
+
+Barrett approved the icon previews and requested integration. Source:
+`~/Downloads/Chaotic paper heap with blue note.png`.
+
+- [x] Prepare and verify the extracted artwork and spacing previews.
+- [x] Integrate Android adaptive/legacy launcher icons and web/PWA icons.
+- [x] Verify PNG dimensions/transparency, Flutter analysis, and Android/web builds.
+- [ ] Verify launcher appearance on an emulator and physical phone.
+
+Android uses a 55% adaptive foreground with the sampled cream background; web
+includes standalone, favicon, and padded maskable assets. Debug/release APK and web
+builds succeed. The release APK was installed and launched on the Pixel 6 Pro; visual
+launcher-mask verification remains pending. Flutter analysis and all 209 widget tests
+pass, including duration-label formatting.

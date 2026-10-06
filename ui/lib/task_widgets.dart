@@ -92,7 +92,7 @@ class _TaskRowState extends State<TaskRow> {
     final colors = priorityColors[task.priority] ?? unsetColors;
     final duration = task.durationMinutes == null
         ? 'Unknown'
-        : '${task.durationMinutes} min';
+        : formatDuration(task.durationMinutes!);
     final dueDate = task.dueDate == null
         ? null
         : MaterialLocalizations.of(context)
@@ -268,7 +268,7 @@ class _TaskRowState extends State<TaskRow> {
     final completed = task.status == 'completed';
     final duration = task.durationMinutes == null
         ? 'Unknown'
-        : '${task.durationMinutes} min';
+        : formatDuration(task.durationMinutes!);
     final dueDate = task.dueDate == null
         ? null
         : MaterialLocalizations.of(context)

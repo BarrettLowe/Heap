@@ -166,8 +166,9 @@ void main() {
       await openEditor(tester, org);
       await tester.pumpAndSettle();
       expect(tester.getSize(find.byKey(const Key('editor-title'))).width, 592);
-      await revealTap(tester, find.byKey(const Key('editor-duration')));
-      await tester.tap(find.text('Unknown').last);
+      final unknownDuration = find.byKey(const Key('editor-duration-0'));
+      await tester.ensureVisible(unknownDuration);
+      await tester.tap(unknownDuration);
       await tester.pumpAndSettle();
       expect(
         find.text('Saving will return this task to the inbox.'),
@@ -332,7 +333,14 @@ void main() {
           find.byKey(const Key('editor-title')),
           'My edits',
         );
-        await revealTap(tester, find.byKey(const Key('editor-awaiting')));
+        final awaiting = find.byKey(const Key('editor-awaiting'));
+        await tester.scrollUntilVisible(
+          awaiting,
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.tap(awaiting);
+        await tester.pumpAndSettle();
         await revealTap(tester, find.byKey(const Key('editor-save')));
         expect(
           tester
