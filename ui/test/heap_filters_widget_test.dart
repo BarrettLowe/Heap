@@ -169,6 +169,43 @@ void main() {
     expect(find.byType(RangeSlider), findsNothing);
   });
 
+  testWidgets('legacy minimum is preserved until the slider changes', (
+    tester,
+  ) async {
+    HeapFilter? changed;
+    const original = HeapFilter.time(45);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: HeapFilterPills(
+            filter: original,
+            onChanged: (filter) => changed = filter,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Time: 45 min–4 hours'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('time-filter')));
+    await tester.pumpAndSettle();
+    expect(find.text('1 hour–4 hours'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('time-range-done')));
+    await tester.pumpAndSettle();
+    expect(changed, isNull);
+    expect(find.text('Time: 45 min–4 hours'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('time-filter')));
+    await tester.pumpAndSettle();
+    tester.widget<RangeSlider>(find.byType(RangeSlider)).onChanged!(
+      const RangeValues(2, 5),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('time-range-done')));
+    await tester.pumpAndSettle();
+    expect(changed!.minimumMinutes, 30);
+    expect(changed!.maximumMinutes, 240);
+  });
+
   testWidgets(
     'each Time slider detent has a visible label in the compact popup',
     (tester) async {

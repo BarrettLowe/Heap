@@ -50,9 +50,9 @@ class HeapFilterPills extends StatelessWidget {
     Future<void> openRange() async {
       var lowerIndex = minimum == null
           ? 0
-          : durationChoices
-                .indexOf(minimum)
-                .clamp(0, durationChoices.length - 1);
+          : durationChoices.indexWhere((choice) => choice >= minimum);
+      if (lowerIndex < 0) lowerIndex = durationChoices.length - 1;
+      var sliderChanged = false;
       var upperIndex = durationChoices
           .indexOf(maximum)
           .clamp(0, durationChoices.length - 1);
@@ -100,6 +100,7 @@ class HeapFilterPills extends StatelessWidget {
                         onChanged: (values) => setDialogState(() {
                           lowerIndex = values.start.round();
                           upperIndex = values.end.round();
+                          sliderChanged = true;
                         }),
                       ),
                       Row(
@@ -124,7 +125,7 @@ class HeapFilterPills extends StatelessWidget {
           ),
         ),
       );
-      if (applied == true) {
+      if (applied == true && sliderChanged) {
         onChanged(
           HeapFilter.timeRange(
             durationChoices[lowerIndex],
