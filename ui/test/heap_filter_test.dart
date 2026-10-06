@@ -5,16 +5,17 @@ import 'task_flow_fakes.dart';
 
 void main() {
   test(
-    'Time is a minimum including the boundary, not an available-time maximum',
+    'Time range includes both boundaries and excludes unknown durations',
     () {
-      const filter = HeapFilter.time(30);
+      const filter = HeapFilter.timeRange(30, 60);
       for (final minutes in [5, 15, 30, 60, 120, 240]) {
         expect(
           filter.matches(detail(priority: 1, duration: minutes)),
-          minutes >= 30,
+          minutes >= 30 && minutes <= 60,
         );
       }
       expect(filter.matches(detail(priority: 1)), false);
+      expect(filter.maximumMinutes, 60);
     },
   );
   test(
@@ -41,11 +42,12 @@ void main() {
         detail(title: 'Second', priority: 1, duration: 15),
         detail(title: 'Third', priority: 2, duration: 30),
       ];
-      const time = HeapFilter.time(30);
+      const time = HeapFilter.timeRange(30, 120);
       const priority = HeapFilter.priority(1);
       const any = HeapFilter.none();
       expect(time.priority, isNull);
       expect(priority.minimumMinutes, isNull);
+      expect(priority.maximumMinutes, isNull);
       expect(any.active, false);
       expect(tasks.where(time.matches).map((task) => task.title), [
         'First',

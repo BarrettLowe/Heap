@@ -464,3 +464,14 @@ includes standalone, favicon, and padded maskable assets. Debug/release APK and 
 builds succeed. The release APK was installed and launched on the Pixel 6 Pro; visual
 launcher-mask verification remains pending. Flutter analysis and all 209 widget tests
 pass, including duration-label formatting.
+
+## 29. Selectable time-range filter
+
+- [x] Replace the one-sided time choice with a discrete inclusive min–max range.
+- [x] Label each duration detent and indicate an active range on the Time button.
+- [x] Apply on outside tap or Done; cancel on Back/Escape.
+- [x] Verify Flutter tests, analysis, and web build.
+- [ ] Verify the filter on an Android emulator and physical phone.
+
+Verified with 213 passing Flutter tests, clean analysis, and successful web build.
+No emulator or phone was connected for visual/device verification.
