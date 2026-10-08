@@ -76,6 +76,11 @@ class HeapFilterPills extends StatelessWidget {
                   title: const Text('Time range'),
                   actions: [
                     TextButton(
+                      key: const Key('time-range-clear'),
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('Clear'),
+                    ),
+                    TextButton(
                       key: const Key('time-range-done'),
                       onPressed: () => Navigator.of(context).pop(true),
                       child: const Text('Done'),
@@ -125,7 +130,9 @@ class HeapFilterPills extends StatelessWidget {
           ),
         ),
       );
-      if (applied == true && sliderChanged) {
+      if (applied == false) {
+        onChanged(const HeapFilter.none());
+      } else if (applied == true && sliderChanged) {
         onChanged(
           HeapFilter.timeRange(
             durationChoices[lowerIndex],

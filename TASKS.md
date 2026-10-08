@@ -469,9 +469,10 @@ pass, including duration-label formatting.
 
 - [x] Replace the one-sided time choice with a discrete inclusive min–max range.
 - [x] Label each duration detent and indicate an active range on the Time button.
-- [x] Apply on outside tap or Done; cancel on Back/Escape.
+- [x] Apply on outside tap or Done; cancel on Back/Escape; clear the active filter.
+- [x] Preserve legacy minimum-only filters when the slider is confirmed unchanged.
 - [x] Verify Flutter tests, analysis, and web build.
 - [ ] Verify the filter on an Android emulator and physical phone.
 
-Verified with 213 passing Flutter tests, clean analysis, and successful web build.
+Verified with 216 passing Flutter tests, clean analysis, and successful web build.
 No emulator or phone was connected for visual/device verification.

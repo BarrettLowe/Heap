@@ -169,6 +169,51 @@ void main() {
     expect(find.byType(RangeSlider), findsNothing);
   });
 
+  testWidgets('Clear removes an active time range and shows all tasks', (
+    tester,
+  ) async {
+    final org = FakeOrganization()..onList = () async => sampleTasks();
+    await hostFilters(tester, org);
+    await pick(tester, 'time', 30);
+    expect(visibleTitles(tester), ['Long waiting task', 'Boundary task']);
+
+    await tester.tap(find.byKey(const Key('time-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('time-range-clear')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Time'), findsOneWidget);
+    expect(visibleTitles(tester), [
+      'Long waiting task',
+      'Short critical task',
+      'Boundary task',
+    ]);
+    expect(org.lists, 1);
+  });
+
+  testWidgets('Clear removes a legacy minimum-only time filter', (tester) async {
+    HeapFilter? changed;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: HeapFilterPills(
+            filter: const HeapFilter.time(45),
+            onChanged: (filter) => changed = filter,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('time-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('time-range-clear')));
+    await tester.pumpAndSettle();
+
+    expect(changed!.active, isFalse);
+    expect(changed!.minimumMinutes, isNull);
+    expect(changed!.maximumMinutes, isNull);
+  });
+
   testWidgets('legacy minimum is preserved until the slider changes', (
     tester,
   ) async {
