@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:heap_app/heap_api.dart';
+import 'package:heap_app/heap_filter.dart';
+import 'package:heap_app/heap_filter_pills.dart';
 import 'package:heap_app/heap_style.dart';
 import 'package:heap_app/inbox_controller.dart';
 import 'package:heap_app/task_detail.dart';
@@ -54,16 +56,36 @@ Future<InboxController> hostFilters(
   return inbox;
 }
 
-Future<void> pick(WidgetTester tester, String type, int value) async {
+Future<void> pick(
+  WidgetTester tester,
+  String type,
+  int value, {
+  int? maximum,
+}) async {
   final control = find.byKey(Key('$type-filter'));
   await tester.ensureVisible(control);
   await tester.pumpAndSettle();
   await tester.tap(control);
   await tester.pumpAndSettle();
-  final option = find.byKey(Key('$type-filter-${value == 0 ? 'any' : value}'));
-  await tester.ensureVisible(option);
-  await tester.pumpAndSettle();
-  await tester.tap(option);
+  if (type == 'time') {
+    final slider = tester.widget<RangeSlider>(find.byType(RangeSlider));
+    final index = value == 0 ? 0 : durationChoices.indexOf(value);
+    slider.onChanged!(
+      RangeValues(
+        index.toDouble(),
+        (maximum == null ? 5 : durationChoices.indexOf(maximum)).toDouble(),
+      ),
+    );
+    await tester.pump();
+    await tester.tapAt(const Offset(2, 2));
+  } else {
+    final option = find.byKey(
+      Key('$type-filter-${value == 0 ? 'any' : value}'),
+    );
+    await tester.ensureVisible(option);
+    await tester.pumpAndSettle();
+    await tester.tap(option);
+  }
   await tester.pumpAndSettle();
 }
 
@@ -87,7 +109,7 @@ void main() {
       ]);
       await pick(tester, 'time', 30);
       expect(visibleTitles(tester), ['Long waiting task', 'Boundary task']);
-      expect(find.text('Time: ≥30 min'), findsOneWidget);
+      expect(find.text('Time: 30 min–4 hours'), findsOneWidget);
       expect(find.text('Priority'), findsOneWidget);
       expect(
         tester
@@ -115,8 +137,180 @@ void main() {
     },
   );
 
+  testWidgets('Time range applies on outside tap and filters both endpoints', (
+    tester,
+  ) async {
+    final org = FakeOrganization()
+      ..onList = () async => [
+        detail(id: secondId, title: 'Below range', priority: 1, duration: 15),
+        detail(id: thirdId, title: 'Lower edge', priority: 1, duration: 30),
+        detail(
+          id: '00000000-0000-0000-0000-000000000003',
+          title: 'Upper edge',
+          priority: 1,
+          duration: 60,
+        ),
+        detail(
+          id: '00000000-0000-0000-0000-000000000004',
+          title: 'Above range',
+          priority: 1,
+          duration: 120,
+        ),
+        detail(
+          id: '00000000-0000-0000-0000-000000000005',
+          title: 'Unknown',
+          priority: 1,
+        ),
+      ];
+    await hostFilters(tester, org);
+    await pick(tester, 'time', 30, maximum: 60);
+    expect(visibleTitles(tester), ['Lower edge', 'Upper edge']);
+    expect(find.text('Time: 30 min–1 hour'), findsOneWidget);
+    expect(find.byType(RangeSlider), findsNothing);
+  });
+
+  testWidgets('Clear removes an active time range and shows all tasks', (
+    tester,
+  ) async {
+    final org = FakeOrganization()..onList = () async => sampleTasks();
+    await hostFilters(tester, org);
+    await pick(tester, 'time', 30);
+    expect(visibleTitles(tester), ['Long waiting task', 'Boundary task']);
+
+    await tester.tap(find.byKey(const Key('time-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('time-range-clear')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Time'), findsOneWidget);
+    expect(visibleTitles(tester), [
+      'Long waiting task',
+      'Short critical task',
+      'Boundary task',
+    ]);
+    expect(org.lists, 1);
+  });
+
+  testWidgets('Clear removes a legacy minimum-only time filter', (tester) async {
+    HeapFilter? changed;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: HeapFilterPills(
+            filter: const HeapFilter.time(45),
+            onChanged: (filter) => changed = filter,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('time-filter')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('time-range-clear')));
+    await tester.pumpAndSettle();
+
+    expect(changed!.active, isFalse);
+    expect(changed!.minimumMinutes, isNull);
+    expect(changed!.maximumMinutes, isNull);
+  });
+
+  testWidgets('legacy minimum is preserved until the slider changes', (
+    tester,
+  ) async {
+    HeapFilter? changed;
+    const original = HeapFilter.time(45);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: HeapFilterPills(
+            filter: original,
+            onChanged: (filter) => changed = filter,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Time: 45 min–4 hours'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('time-filter')));
+    await tester.pumpAndSettle();
+    expect(find.text('1 hour–4 hours'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('time-range-done')));
+    await tester.pumpAndSettle();
+    expect(changed, isNull);
+    expect(find.text('Time: 45 min–4 hours'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('time-filter')));
+    await tester.pumpAndSettle();
+    tester.widget<RangeSlider>(find.byType(RangeSlider)).onChanged!(
+      const RangeValues(2, 5),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('time-range-done')));
+    await tester.pumpAndSettle();
+    expect(changed!.minimumMinutes, 30);
+    expect(changed!.maximumMinutes, 240);
+  });
+
   testWidgets(
-    'opening and Escape cancellation keep the active filter; Any clears',
+    'each Time slider detent has a visible label in the compact popup',
+    (tester) async {
+      HeapFilter? changed;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: HeapFilterPills(
+              filter: const HeapFilter.time(30),
+              onChanged: (filter) => changed = filter,
+            ),
+          ),
+        ),
+      );
+      expect(find.text('Time: 30 min–4 hours'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('time-filter')));
+      await tester.pumpAndSettle();
+      for (final label in ['5m', '15m', '30m', '1h', '2h', '4h']) {
+        expect(find.text(label), findsOneWidget);
+      }
+      expect(tester.getSize(find.byType(RangeSlider)).width, lessThan(350));
+      expect(find.byKey(const Key('time-range-done')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      tester.widget<RangeSlider>(find.byType(RangeSlider)).onChanged!(
+        const RangeValues(2, 3),
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('time-range-done')));
+      await tester.pumpAndSettle();
+      expect(changed!.minimumMinutes, 30);
+      expect(changed!.maximumMinutes, 60);
+    },
+  );
+
+  for (final dismissByBack in [false, true]) {
+    testWidgets(
+      'Time slider selection is not applied when dismissed by ${dismissByBack ? 'back' : 'Escape'}',
+      (tester) async {
+        final org = FakeOrganization()..onList = () async => sampleTasks();
+        await hostFilters(tester, org);
+        await tester.tap(find.byKey(const Key('time-filter')));
+        await tester.pumpAndSettle();
+        tester.widget<RangeSlider>(find.byType(RangeSlider)).onChanged!(
+          const RangeValues(2, 3),
+        );
+        await tester.pump();
+        if (dismissByBack) {
+          await tester.binding.handlePopRoute();
+        } else {
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+        }
+        await tester.pumpAndSettle();
+        expect(find.text('Time'), findsOneWidget);
+        expect(visibleTitles(tester).length, 3);
+      },
+    );
+  }
+
+  testWidgets(
+    'Escape keeps the active filter; full Time range includes known durations',
     (tester) async {
       final org = FakeOrganization()..onList = () async => sampleTasks();
       await hostFilters(tester, org);
@@ -126,7 +320,7 @@ void main() {
       expect(find.byKey(const Key('priority-filter-5')), findsOneWidget);
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpAndSettle();
-      expect(find.text('Time: ≥30 min'), findsOneWidget);
+      expect(find.text('Time: 30 min–4 hours'), findsOneWidget);
       expect(visibleTitles(tester), ['Long waiting task', 'Boundary task']);
       await pick(tester, 'time', 0);
       expect(visibleTitles(tester).length, 3);
@@ -150,18 +344,18 @@ void main() {
       expect(find.byKey(const Key('time-filter')), findsNothing);
       await tester.tap(find.byKey(const Key('on-heap-tab')));
       await tester.pumpAndSettle();
-      expect(find.text('Time: ≥30 min'), findsOneWidget);
+      expect(find.text('Time: 30 min–4 hours'), findsOneWidget);
       await tester.ensureVisible(find.text('Long waiting task'));
       await tester.tap(find.text('Long waiting task'));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Cancel editing'));
       await tester.pumpAndSettle();
-      expect(find.text('Time: ≥30 min'), findsOneWidget);
+      expect(find.text('Time: 30 min–4 hours'), findsOneWidget);
       org.onList = () async => [sampleTasks().last];
       await tester.tap(find.byKey(const Key('refresh')));
       await tester.pumpAndSettle();
       expect(visibleTitles(tester), ['Boundary task']);
-      expect(find.text('Time: ≥30 min'), findsOneWidget);
+      expect(find.text('Time: 30 min–4 hours'), findsOneWidget);
       expect(org.lists, 2);
       await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(
@@ -177,7 +371,7 @@ void main() {
       await tester.tap(find.byKey(const Key('on-heap-tab')));
       await tester.pumpAndSettle();
       expect(find.text('Time'), findsOneWidget);
-      expect(find.text('Time: ≥30 min'), findsNothing);
+      expect(find.text('Time: 30 min–4 hours'), findsNothing);
     },
   );
 
@@ -270,7 +464,7 @@ void main() {
         find.text('Task saved to the heap. Hidden by the current filter.'),
         findsOneWidget,
       );
-      expect(find.text('Time: ≥30 min'), findsOneWidget);
+      expect(find.text('Time: 30 min–4 hours'), findsOneWidget);
       expect(find.text('No tasks match this filter'), findsOneWidget);
       expect(visibleTitles(tester), isEmpty);
       final heading = tester.widget<Focus>(
@@ -284,7 +478,7 @@ void main() {
       expect(heading.focusNode!.hasFocus, true);
       delayed.complete([remote]);
       await tester.pumpAndSettle();
-      expect(find.text('Time: ≥30 min'), findsOneWidget);
+      expect(find.text('Time: 30 min–4 hours'), findsOneWidget);
       expect(heading.focusNode!.hasFocus, true);
       await pick(tester, 'priority', 2);
       expect(find.text('Priority: P2'), findsOneWidget);
@@ -313,13 +507,13 @@ void main() {
           expect(
             tester.getSemantics(find.byKey(const Key('time-filter'))),
             isSemantics(
-              label: 'Time filter, at least 30 min',
+              label: 'Time filter, 30 min to 4 hours',
               isSelected: true,
               isButton: true,
               hasTapAction: true,
             ),
           );
-          for (final type in ['time', 'priority']) {
+          for (final type in ['priority']) {
             final control = find.byKey(Key('$type-filter'));
             await tester.ensureVisible(control);
             await tester.pumpAndSettle();

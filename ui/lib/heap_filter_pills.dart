@@ -19,20 +19,7 @@ class HeapFilterPills extends StatelessWidget {
     spacing: 8,
     runSpacing: 8,
     children: [
-      _picker(
-        key: 'time-filter',
-        icon: Icons.schedule,
-        value: filter.minimumMinutes,
-        label: filter.minimumMinutes == null
-            ? 'Time'
-            : 'Time: ≥${formatDuration(filter.minimumMinutes!)}',
-        accessibleLabel: filter.minimumMinutes == null
-            ? 'Time filter, any duration'
-            : 'Time filter, at least ${formatDuration(filter.minimumMinutes!)}',
-        choices: durationChoices,
-        option: (minutes) => Text('At least ${formatDuration(minutes)}'),
-        changed: (value) => onChanged(HeapFilter.time(value)),
-      ),
+      _timePicker(context),
       _picker(
         key: 'priority-filter',
         icon: Icons.flag_outlined,
@@ -49,6 +36,136 @@ class HeapFilterPills extends StatelessWidget {
       ),
     ],
   );
+
+  Widget _timePicker(BuildContext context) {
+    final minimum = filter.minimumMinutes;
+    final maximum = filter.maximumMinutes ?? durationChoices.last;
+    final rangeLabel = minimum == null
+        ? 'Time'
+        : 'Time: ${formatDuration(minimum)}–${formatDuration(maximum)}';
+    final accessibleLabel = minimum == null
+        ? 'Time filter, any duration'
+        : 'Time filter, ${formatDuration(minimum)} to ${formatDuration(maximum)}';
+
+    Future<void> openRange() async {
+      var lowerIndex = minimum == null
+          ? 0
+          : durationChoices.indexWhere((choice) => choice >= minimum);
+      if (lowerIndex < 0) lowerIndex = durationChoices.length - 1;
+      var sliderChanged = false;
+      var upperIndex = durationChoices
+          .indexOf(maximum)
+          .clamp(0, durationChoices.length - 1);
+      final applied = await showGeneralDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        barrierLabel: 'Apply time range',
+        barrierColor: Colors.black54,
+        pageBuilder: (context, animation, secondaryAnimation) => StatefulBuilder(
+          builder: (context, setDialogState) => Stack(
+            children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  key: const Key('time-range-outside'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Navigator.of(context).pop(true),
+                ),
+              ),
+              Center(
+                child: AlertDialog(
+                  title: const Text('Time range'),
+                  actions: [
+                    TextButton(
+                      key: const Key('time-range-clear'),
+                      onPressed: () => Navigator.of(context).pop(false),
+                      child: const Text('Clear'),
+                    ),
+                    TextButton(
+                      key: const Key('time-range-done'),
+                      onPressed: () => Navigator.of(context).pop(true),
+                      child: const Text('Done'),
+                    ),
+                  ],
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '${formatDuration(durationChoices[lowerIndex])}–${formatDuration(durationChoices[upperIndex])}',
+                      ),
+                      RangeSlider(
+                        min: 0,
+                        max: (durationChoices.length - 1).toDouble(),
+                        divisions: durationChoices.length - 1,
+                        values: RangeValues(
+                          lowerIndex.toDouble(),
+                          upperIndex.toDouble(),
+                        ),
+                        semanticFormatterCallback: (value) =>
+                            formatDuration(durationChoices[value.round()]),
+                        onChanged: (values) => setDialogState(() {
+                          lowerIndex = values.start.round();
+                          upperIndex = values.end.round();
+                          sliderChanged = true;
+                        }),
+                      ),
+                      Row(
+                        children: [
+                          for (final minutes in durationChoices)
+                            Expanded(
+                              child: Text(
+                                _durationTickLabel(minutes),
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      const Text('Tap outside to apply.'),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (applied == false) {
+        onChanged(const HeapFilter.none());
+      } else if (applied == true && sliderChanged) {
+        onChanged(
+          HeapFilter.timeRange(
+            durationChoices[lowerIndex],
+            durationChoices[upperIndex],
+          ),
+        );
+      }
+    }
+
+    return Semantics(
+      button: true,
+      selected: minimum != null,
+      label: accessibleLabel,
+      onTap: openRange,
+      child: ExcludeSemantics(
+        child: TextButton.icon(
+          key: const Key('time-filter'),
+          onPressed: openRange,
+          icon: const Icon(Icons.schedule),
+          label: Text(rangeLabel),
+          style: TextButton.styleFrom(
+            foregroundColor: minimum == null ? heapInk : Colors.white,
+            backgroundColor: minimum == null ? heapCanvas : heapGreen,
+            minimumSize: const Size(48, 48),
+            shape: const StadiumBorder(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _durationTickLabel(int minutes) =>
+      minutes < 60 ? '${minutes}m' : '${minutes ~/ 60}h';
 
   Widget _picker({
     required String key,
