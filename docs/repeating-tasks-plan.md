@@ -54,8 +54,11 @@ flowchart LR
   a dependency-link involvement query. Keep business decisions out of SQL.
 - `SQLiteTaskStore`: persist repeat and successor bookkeeping on every read/write
   path. Use existing transaction style. No new database service or scheduler.
-  Do not build migration/legacy compatibility machinery; follow the existing
-  small nullable-column initialization only where needed for the current store.
+  The existing startup migration adds missing nullable columns with `ALTER
+  TABLE`; preserve all existing rows and fields. Verify this using the explicit
+  pre-recurrence fixture in `tests/test_recurrence_database_upgrade.py`, including
+  reopening and real app startup. No separate migration framework is needed for
+  this additive change. Back up production before deploying.
 
 An incoming dependency link must prevent Undo even though adding it updates the
 other task's timestamp. Removed incoming links need not block forever: if no
@@ -100,8 +103,13 @@ drafts, payloads, comparison/recovery, and display.
 - GETs stay read-only. Serialize token checks and the whole transition under the
   existing 1-writer operation boundary. No automatic write retries.
 
-Roll backend/client changes out together. No deployed-client compatibility work
-is required for this not-live app; do not deploy the hosted backend in this task.
+Heap is live. The database upgrade is additive, but the current implementation
+requires new organization/completion request fields that older installed clients
+omit. Do not assume simultaneous backend/app updates. PR #11 remains draft until
+old-client compatibility is addressed or Barrett agrees a safe rollout. The
+upgrade test uses a synthetic old-schema database, not a production backup;
+verification against an actual backup remains a deployment check. Do not deploy
+the hosted backend in this task.
 
 ## Flutter behavior
 

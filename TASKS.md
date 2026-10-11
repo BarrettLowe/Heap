@@ -539,3 +539,25 @@ model/draft probes, and inspected the successful 50-test Chrome log.
 Work is isolated on `feat/repeating-tasks`; uncommitted branding work in `Heap`
 is not included. No hosted backend or phone beta deployment was performed.
 Pull request: [#11](https://github.com/BarrettLowe/Heap/pull/11).
+
+### Live-data correction and upgrade test
+
+Barrett clarified that Heap is live. Corrected `AGENTS.md` to protect production
+data and require a safe upgrade path and installed-client compatibility. PR #11
+was returned to draft: older apps do not send the newly required `repeat` and
+completion `local_date` fields. This remains separate from database safety.
+
+- [x] Add a focused pre-recurrence SQLite upgrade test and verify it locally.
+- [x] Complete independent review of the upgrade test.
+- [ ] Resolve old-client compatibility or agree a safe rollout before deployment.
+- [ ] Verify upgrading an actual production backup before deployment.
+
+`tests/test_recurrence_database_upgrade.py` builds the old schema independently,
+retains old task/project/dependency records and history, checks nullable recurrence
+defaults, and exercises startup and reads after reopening. Coordinator ran the
+focused test and all 375 Python tests with 96.69% line coverage. No production
+database was accessed; this uses only a synthetic fixture. No new migration
+framework or production-code change was needed: startup already uses additive
+`ALTER TABLE` operations. Independent review approved the test and live-data
+guidance; isolated mutations disabling the repeat-column upgrade or overwriting
+old update timestamps both made the test fail.

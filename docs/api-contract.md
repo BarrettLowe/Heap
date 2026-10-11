@@ -12,7 +12,11 @@ The current completion route and naming are documented in [task-completion-plan.
 
 This addition supersedes the earlier completion request and task metadata shapes
 below. Full behavior and ownership: [repeating-tasks-plan.md](repeating-tasks-plan.md);
-domain rules: spec section 9.1. Backend and Flutter must roll out together.
+domain rules: spec section 9.1. Heap is live: the required request additions below
+are not compatible with older installed clients. PR #11 remains draft pending
+client compatibility or an agreed safe rollout. The additive SQLite startup
+migration is covered by the old-schema upgrade test; it does not resolve API
+compatibility.
 
 Inbox/detail/Heap/project-task objects and full organization PUT requests require
 nullable `repeat`: null means Off; otherwise exactly
