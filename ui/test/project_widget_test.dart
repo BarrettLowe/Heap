@@ -29,7 +29,7 @@ Future<void> host(
     MaterialApp(
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: heapGreen),
+        colorScheme: ColorScheme.fromSeed(seedColor: heapPrimary),
       ),
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(context)
@@ -712,7 +712,10 @@ void main() {
     expect(t.getSize(badge), const Size(22, 22));
     final decoration = t.widget<Container>(swatch).decoration! as BoxDecoration;
     expect(decoration.color, ProjectSwatchColor.parse('#B82E2E'));
-    expect((36 - 22) / 2, 7); // 7px of the selected hue remains visible around the badge.
+    expect(
+      (36 - 22) / 2,
+      7,
+    ); // 7px of the selected hue remains visible around the badge.
   });
   test('palette has 20 chromatic hues in evenly spaced order', () {
     expect(projectColorValues, hasLength(20));

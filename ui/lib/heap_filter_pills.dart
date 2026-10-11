@@ -155,9 +155,11 @@ class HeapFilterPills extends StatelessWidget {
           label: Text(rangeLabel),
           style: TextButton.styleFrom(
             foregroundColor: minimum == null ? heapInk : Colors.white,
-            backgroundColor: minimum == null ? heapCanvas : heapGreen,
+            backgroundColor: minimum == null ? heapSurface : heapPrimary,
             minimumSize: const Size(48, 48),
-            shape: const StadiumBorder(),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24),
+            ),
           ),
         ),
       ),
@@ -206,17 +208,17 @@ class HeapFilterPills extends StatelessWidget {
               child: option(choice),
             ),
         ],
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(24),
         child: ExcludeSemantics(
           child: Container(
             constraints: const BoxConstraints(minHeight: 48),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: value == null ? heapCanvas : heapGreen,
+              color: value == null ? heapSurface : heapPrimary,
               border: Border.all(
-                color: value == null ? heapDivider : heapGreen,
+                color: value == null ? heapBorder : heapPrimary,
               ),
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(24),
             ),
             child: IconTheme(
               data: IconThemeData(

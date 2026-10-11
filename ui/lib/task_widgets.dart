@@ -19,10 +19,8 @@ class StatusPanel extends StatelessWidget {
     child: Semantics(
       liveRegion: true,
       child: Material(
-        color: consequence
-            ? Theme.of(context).colorScheme.secondaryContainer
-            : Theme.of(context).colorScheme.errorContainer,
-        borderRadius: BorderRadius.circular(8),
+        color: consequence ? heapWarningSurface : heapErrorSurface,
+        borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(
@@ -122,14 +120,14 @@ class _TaskRowState extends State<TaskRow> {
                 ? heapHighlight
                 : Colors.transparent,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(24),
               side: _focused
-                  ? const BorderSide(color: heapGreen, width: 2)
+                  ? const BorderSide(color: heapPrimary, width: 2)
                   : BorderSide.none,
             ),
             child: InkWell(
               focusNode: widget.focusNode,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(24),
               onTap: widget.onOpen,
               onFocusChange: (value) => setState(() => _focused = value),
               onHover: (value) => setState(() => _hovered = value),
@@ -282,7 +280,7 @@ class _TaskRowState extends State<TaskRow> {
       style: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.w700,
-        color: neutral ? const Color(0xFF3F4742) : heapTitle,
+        color: neutral ? heapCompletionText : heapTitle,
       ),
       child: Text(task.title),
     );
@@ -305,7 +303,7 @@ class _TaskRowState extends State<TaskRow> {
             : Colors.transparent,
         shape: CircleBorder(
           side: _completionFocused
-              ? const BorderSide(color: heapGreen, width: 2)
+              ? const BorderSide(color: heapPrimary, width: 2)
               : BorderSide.none,
         ),
         child: InkWell(
@@ -332,9 +330,9 @@ class _TaskRowState extends State<TaskRow> {
                       height: 24,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: completed ? heapGreen : Colors.transparent,
+                        color: completed ? heapPrimary : Colors.transparent,
                         border: Border.all(
-                          color: completed ? heapGreen : heapMuted,
+                          color: completed ? heapPrimary : heapBorder,
                           width: 2,
                         ),
                       ),
@@ -364,7 +362,7 @@ class _TaskRowState extends State<TaskRow> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: _bodyFocused
-              ? const BorderSide(color: heapGreen, width: 2)
+              ? const BorderSide(color: heapPrimary, width: 2)
               : BorderSide.none,
         ),
         child: InkWell(
@@ -398,20 +396,11 @@ class _TaskRowState extends State<TaskRow> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.schedule,
-                          size: 18,
-                          color: neutral ? const Color(0xFF68716C) : heapMuted,
-                        ),
+                        Icon(Icons.schedule, size: 18, color: heapMuted),
                         const SizedBox(width: 6),
                         Text(
                           duration,
-                          style: TextStyle(
-                            color: neutral
-                                ? const Color(0xFF68716C)
-                                : heapMuted,
-                            fontSize: 14,
-                          ),
+                          style: TextStyle(color: heapMuted, fontSize: 14),
                         ),
                       ],
                     ),
@@ -425,7 +414,7 @@ class _TaskRowState extends State<TaskRow> {
                         ),
                         decoration: BoxDecoration(
                           color: neutral
-                              ? const Color(0xFFE5E8E5)
+                              ? heapCompletionNeutral
                               : const Color(0xFFEDF0F4),
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -438,7 +427,7 @@ class _TaskRowState extends State<TaskRow> {
                                   Icons.hourglass_empty,
                                   size: 16,
                                   color: neutral
-                                      ? const Color(0xFF59625C)
+                                      ? heapCompletionText
                                       : const Color(0xFF475465),
                                 ),
                               ),
@@ -450,7 +439,7 @@ class _TaskRowState extends State<TaskRow> {
                           style: TextStyle(
                             fontSize: 13,
                             color: neutral
-                                ? const Color(0xFF3F4742)
+                                ? heapCompletionText
                                 : const Color(0xFF475465),
                           ),
                         ),
@@ -489,9 +478,7 @@ class _TaskRowState extends State<TaskRow> {
                 child: Text(
                   message,
                   style: TextStyle(
-                    color: widget.completionPending
-                        ? heapMuted
-                        : const Color(0xFF8B2D22),
+                    color: widget.completionPending ? heapMuted : heapError,
                     fontSize: 13,
                   ),
                 ),
@@ -529,7 +516,7 @@ class _DueDateMetadata extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = neutral ? const Color(0xFF68716C) : heapMuted;
+    final color = heapMuted;
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
       spacing: 6,

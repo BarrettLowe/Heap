@@ -58,7 +58,7 @@ class TaskToolbar extends StatelessWidget {
                         focusNode: captureFocus,
                         onPressed: onCapture,
                         style: IconButton.styleFrom(
-                          backgroundColor: heapGreen,
+                          backgroundColor: heapPrimary,
                           foregroundColor: Colors.white,
                           fixedSize: const Size(64, 64),
                         ),
@@ -141,6 +141,7 @@ class TaskToolbar extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
                 color: selected ? heapHighlight : null,
+                border: selected ? Border.all(color: heapBorder) : null,
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Icon(icon, size: 24),

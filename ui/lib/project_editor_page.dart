@@ -82,7 +82,7 @@ class _ProjectEditorPageState extends State<ProjectEditorPage> {
       context: context,
       builder: (context) => AlertDialog(
         scrollable: true,
-        title: Text(title),
+        title: Text(title, style: heapSheetHeadingStyle),
         content: Text(message),
         actions: [
           TextButton(
@@ -213,7 +213,7 @@ class _ProjectEditorPageState extends State<ProjectEditorPage> {
                     autofocus: widget.id != null,
                     child: Text(
                       widget.id == null ? 'Add project' : 'Edit project',
-                      style: const TextStyle(fontWeight: FontWeight.w800),
+                      style: heapSheetHeadingStyle,
                     ),
                   ),
                 ),
@@ -232,7 +232,7 @@ class _ProjectEditorPageState extends State<ProjectEditorPage> {
                     MediaQuery.textScalerOf(context).scale(1) >= 1.5;
                 final padding = MediaQuery.sizeOf(context).width >= 600
                     ? 24.0
-                    : 16.0;
+                    : 20.0;
                 final scroller = Scrollbar(
                   controller: _scroll,
                   thumbVisibility: true,
@@ -332,7 +332,9 @@ class _ProjectEditorPageState extends State<ProjectEditorPage> {
           maxLines: null,
           decoration: InputDecoration(
             labelText: 'Project name',
-            border: const OutlineInputBorder(),
+            border: const OutlineInputBorder(
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+            ),
             errorText:
                 c.fieldErrors['name'] ??
                 (_nameTouched && c.draft!.name.trim().isEmpty
@@ -463,7 +465,7 @@ class _DeleteProjectDialogState extends State<_DeleteProjectDialog> {
         canPop: !pending,
         child: AlertDialog(
           scrollable: true,
-          title: const Text('Delete project?'),
+          title: const Text('Delete project?', style: heapSheetHeadingStyle),
           content: Text(
             'This permanently deletes "${widget.name}" and ALL tasks assigned to it, including completed tasks.\n\nThis cannot be undone.',
           ),

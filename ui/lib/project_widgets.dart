@@ -269,7 +269,7 @@ class _ProjectColorOptionState extends State<ProjectColorOption> {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(
-                          color: _focused ? heapGreen : heapMuted,
+                          color: _focused ? heapPrimary : heapMuted,
                           width: _focused ? 2 : 1,
                         ),
                       ),
@@ -295,7 +295,7 @@ class _ProjectColorOptionState extends State<ProjectColorOption> {
                       decoration: _focused
                           ? BoxDecoration(
                               shape: BoxShape.circle,
-                              border: Border.all(color: heapGreen, width: 2),
+                              border: Border.all(color: heapPrimary, width: 2),
                             )
                           : null,
                       alignment: Alignment.center,
@@ -442,15 +442,15 @@ class _ProjectRowState extends State<ProjectRow> {
           ? heapHighlight
           : Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         side: _focused
-            ? const BorderSide(color: heapGreen, width: 2)
+            ? const BorderSide(color: heapPrimary, width: 2)
             : BorderSide.none,
       ),
       child: InkWell(
         focusNode: widget.focusNode,
         onTap: widget.onOpen,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         onFocusChange: (v) => setState(() => _focused = v),
         onHover: (v) => setState(() => _hovered = v),
         child: Padding(
@@ -512,21 +512,14 @@ class ProjectsListBody extends StatelessWidget {
     child: SingleChildScrollView(
       controller: scroll,
       padding: EdgeInsets.symmetric(
-        horizontal: MediaQuery.sizeOf(context).width >= 600 ? 24 : 16,
+        horizontal: MediaQuery.sizeOf(context).width >= 600 ? 24 : 20,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Focus(
             focusNode: headingFocus,
-            child: const Text(
-              'Projects',
-              style: TextStyle(
-                fontSize: 30,
-                fontWeight: FontWeight.w800,
-                color: heapTitle,
-              ),
-            ),
+            child: const Text('Projects', style: heapHeadingStyle),
           ),
           const SizedBox(height: 16),
           Align(

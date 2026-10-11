@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 512 512">
+  <title>Heap option 1: teetering pile</title>
+  <desc>A tall, leaning heap of bent loose sheets, viewed from the side. A blue note slips over its right shoulder. Pencil-like outlines and hatching on warm cream.</desc>
+  <defs>
+    <!-- Cream paper, charcoal graphite and cobalt blue echo the supplied reference. -->
+    <pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(22)">
+      <path d="M1 0L0 7 M4 1L3 6" stroke="#635c4c" stroke-width=".7" opacity=".38"/>
+    </pattern>
+    <filter id="pencil" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency=".095" numOctaves="3" seed="19" result="wobble"/>
+      <feDisplacementMap in="SourceGraphic" in2="wobble" scale="2.6" xChannelSelector="R" yChannelSelector="G" result="drawn"/>
+      <feTurbulence type="fractalNoise" baseFrequency=".72" numOctaves="3" seed="8" result="grain"/>
+      <feColorMatrix in="grain" type="saturate" values="0" result="monoGrain"/>
+      <feComponentTransfer><feFuncA type="linear" slope=".23"/></feComponentTransfer>
+      <feComposite in2="drawn" operator="in" result="paperGrain"/>
+      <feBlend in="drawn" in2="paperGrain" mode="multiply" result="shaded"/>
+      <feComponentTransfer in="monoGrain">
+        <feFuncR type="discrete" tableValues="0 0 1 1"/>
+        <feFuncG type="discrete" tableValues="0 0 1 1"/>
+        <feFuncB type="discrete" tableValues="0 0 1 1"/>
+        <feFuncA type="linear" slope=".3"/>
+      </feComponentTransfer>
+      <feComposite in2="drawn" operator="in" result="graphiteGrain"/>
+      <feBlend in="shaded" in2="graphiteGrain" mode="screen"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" fill="#faf7f0"/>
+  <!-- All sheets are separate editable paths; the pile is seen above a low ground line. -->
+  <g id="ground" stroke="#595347" fill="none" stroke-linecap="round" opacity=".26">
+    <path d="M90 440Q201 450 407 440 M117 446Q236 453 371 447" stroke-width="2"/>
+    <path d="M127 437l-14 6m32-7-14 9m35-7-11 8m31-9-9 9m31-8-7 8m31-8-6 8m30-8-6 8m30-9-8 9m30-10-8 8m27-10-9 10m27-11-8 8"/>
+  </g>
+  <g id="artwork" filter="url(#pencil)" stroke="#282723" stroke-width="4.3" stroke-linecap="round" stroke-linejoin="round">
+    <g id="foundation">
+      <path d="M100 384Q158 364 231 367L337 351Q355 387 405 406L420 430Q354 419 295 441Q220 454 169 433L86 426Q103 407 100 384Z" fill="#eee6d5"/>
+      <path d="M87 418Q142 412 171 425Q215 448 292 431Q360 412 416 424" fill="none" stroke-width="2.2"/>
+      <path d="M106 375Q142 358 166 343Q255 367 337 336Q359 372 415 390L397 412Q330 400 274 426Q205 438 154 410L94 413Q102 395 106 375Z" fill="#fffaef"/>
+      <path d="M154 410Q205 422 274 410L294 398Q346 389 397 412Q332 401 274 426Q205 438 154 410Z" fill="#d8cdb7" stroke="none"/>
+      <path d="M157 411Q216 428 276 413M278 424Q333 406 385 410" fill="none" stroke-width="1.6"/>
+      <path d="M163 413Q213 431 274 419L302 403Q241 428 183 406Z" fill="url(#hatch)" stroke="none"/>
+      <path d="M105 381Q117 388 125 400L94 413" fill="#e2d8c2" stroke-width="2.2"/>
+    </g>
+    <g id="lower-sheets">
+      <path d="M125 313Q201 291 248 310L352 292Q366 332 400 358L369 385Q310 368 264 391Q194 407 116 378Q135 351 125 313Z" fill="#e9dfcb"/>
+      <path d="M118 371Q203 396 264 380Q319 358 384 374M130 364Q205 385 264 370" fill="none" stroke-width="1.9"/>
+      <path d="M112 300L170 263Q215 286 278 274L342 254Q361 293 399 318Q372 326 354 347Q307 331 266 362Q208 379 131 348L100 354Q117 333 112 300Z" fill="#fffaf0"/>
+      <path d="M100 354L131 348Q208 379 266 362L290 343Q206 364 140 333Z" fill="#ddd2bc" stroke="none"/>
+      <path d="M108 351L140 338Q207 369 265 353" fill="none" stroke-width="1.6"/>
+      <path d="M131 348Q208 379 266 362L288 345Q204 370 143 337Z" fill="url(#hatch)" stroke="none"/>
+      <path d="M150 295Q175 300 183 306Q197 304 206 314M148 311Q190 323 222 319M162 326Q184 335 204 331" fill="none" stroke-width="2.7"/>
+      <path d="M342 254Q351 286 374 300L353 307" fill="#ebe2d0" stroke-width="2"/>
+    </g>
+    <g id="middle-sheets">
+      <path d="M147 230Q191 200 217 210L306 189Q325 229 359 245L387 269Q347 287 325 304Q260 283 190 304L137 288Q155 263 147 230Z" fill="#e6dbc5"/>
+      <path d="M143 278L190 292Q261 272 326 292L370 275M166 278Q195 286 222 279" fill="none" stroke-width="1.9"/>
+      <path d="M127 212Q171 209 199 181Q242 204 290 192L330 183Q339 222 365 232L343 268Q302 252 261 282Q207 276 153 259Q160 233 127 212Z" fill="#fffaef"/>
+      <path d="M127 212Q154 226 170 223L153 259Q154 235 127 212Z" fill="#d7cbb4" stroke-width="2.2"/>
+      <path d="M174 253Q213 264 260 270L281 258L261 282Q209 276 174 264Z" fill="url(#hatch)" stroke="none"/>
+      <path d="M181 219Q205 207 225 217Q235 223 222 227Q199 224 207 234Q222 242 246 235M249 214l21-5m-11 25 25-8" fill="none" stroke-width="3"/>
+    </g>
+    <g id="upper-sheets">
+      <path d="M174 157L237 124Q268 150 314 144Q311 180 352 197L328 229Q292 213 252 237L168 210Q191 187 174 157Z" fill="#e9dfcc"/>
+      <path d="M177 202Q218 220 252 226L276 217M279 215Q302 211 330 219" fill="none" stroke-width="1.8"/>
+      <path d="M163 130Q200 120 218 85Q239 115 274 119Q292 123 312 111Q305 149 340 170Q315 181 297 202Q254 193 220 201L174 179Q188 153 163 130Z" fill="#fffaf0"/>
+      <path d="M312 111Q305 149 340 170L316 174Q297 152 312 111Z" fill="#d8cdb7" stroke-width="2.1"/>
+      <path d="M220 201Q259 190 297 202L306 190Q265 178 227 193Z" fill="url(#hatch)" stroke="none"/>
+      <path d="M198 146Q219 134 240 145Q252 152 239 155Q222 153 220 162Q225 173 262 163M263 144q11 2 23-3m-30 32 23-8" fill="none" stroke-width="3"/>
+      <path d="M166 132Q197 123 216 89M177 179L220 200" fill="none" stroke-width="1.3" opacity=".55"/>
+    </g>
+    <g id="blue-note">
+      <path d="M281 231Q306 225 330 211Q332 238 359 253L379 276Q357 280 345 305Q323 323 301 345Q302 313 278 295L262 274Q282 256 281 231Z" fill="#2478eb"/>
+      <path d="M301 345Q302 313 278 295L262 274L279 278Q307 306 315 331Z" fill="#1358ba" stroke-width="2.2"/>
+      <path d="M286 240Q310 234 326 220M348 258l22 19" fill="none" stroke="#67a9ff" stroke-width="1.7"/>
+      <path d="M294 258Q327 237 327 251Q322 265 300 277Q291 283 300 283Q317 279 337 264Q322 284 307 299L343 284M322 310l24-18" fill="none" stroke-width="3.6"/>
+      <path d="M311 333l5-16m3 8 2-12m2 7 2-10m2 5 3-11" fill="none" stroke="#173660" stroke-width="1" opacity=".5"/>
+    </g>
+    <g id="front-loose-sheet">
+      <path d="M184 355Q211 355 230 334Q250 362 280 363L301 357Q293 385 328 400Q294 405 262 423Q219 422 177 402Q195 382 184 355Z" fill="#fffaf0"/>
+      <path d="M301 357Q293 385 328 400L306 395Q284 380 301 357Z" fill="#ded3bc" stroke-width="2"/>
+      <path d="M177 402Q219 422 262 423L277 413Q233 415 191 395Z" fill="url(#hatch)" stroke="none"/>
+      <path d="M209 372Q229 362 240 370Q251 379 230 388Q210 397 212 386Q218 377 245 380Q260 385 248 394Q244 397 266 392M203 396q13 0 23 7" fill="none" stroke-width="3"/>
+    </g>
+  </g>
+</svg>

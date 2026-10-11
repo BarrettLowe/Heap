@@ -21,7 +21,14 @@ flutter:
   assets:
     - assets/fonts/LICENSE.txt
     - assets/fonts/APACHE-2.0.txt
+    - assets/fonts/NOTO-SERIF-OFL.txt
+    - assets/fonts/heap-serif-provenance.txt
+    - assets/images/heap-mark.png
   fonts:
+    - family: HeapSerif
+      fonts:
+        - asset: assets/fonts/heap-serif-bold.ttf
+          weight: 700
     - family: HeapProjectIcons
       fonts:
         - asset: assets/fonts/heap-project-icons.ttf
