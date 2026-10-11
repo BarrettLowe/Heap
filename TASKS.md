@@ -498,7 +498,7 @@ Designer handoff: `docs/repeating-tasks-design.md`.
 - [x] Designer: review actual narrow/large-text Android and web screenshots.
 - [x] Complete independent final review and any fix/review cycle.
 - [ ] Verify repeating-task behavior on a physical phone.
-- [ ] Push the reviewed branch and open a pull request; do not merge or deploy.
+- [x] Push the reviewed branch and open a pull request; do not merge or deploy.
 
 Initial coordinator verification: 373 Python tests passed with 96.61% line coverage;
 234 Flutter tests, analysis, web/debug APK builds, lock and whitespace checks
@@ -538,3 +538,4 @@ model/draft probes, and inspected the successful 50-test Chrome log.
 
 Work is isolated on `feat/repeating-tasks`; uncommitted branding work in `Heap`
 is not included. No hosted backend or phone beta deployment was performed.
+Pull request: [#11](https://github.com/BarrettLowe/Heap/pull/11).
