@@ -8,6 +8,47 @@ Python owns rules and durable storage. Flutter is server-backed: no disk task ca
 
 The current completion route and naming are documented in [task-completion-plan.md](task-completion-plan.md): `PUT /api/v1/tasks/{task_id}/completion` sets or undoes completion with a comparison token. This is an explicit exception to the older terminal-completion policy below: organization still rejects completed tasks, but completion undo can restore a qualifying Heap task with its original age. Current code uses `on_heap`, `on_heap_since`, and `/api/v1/heap` rather than the historical On-deck transport names in this document.
 
+## Completion-based recurrence (approved contract)
+
+This addition supersedes the earlier completion request and task metadata shapes
+below. Full behavior and ownership: [repeating-tasks-plan.md](repeating-tasks-plan.md);
+domain rules: spec section 9.1. Backend and Flutter must roll out together.
+
+Inbox/detail/Heap/project-task objects and full organization PUT requests require
+nullable `repeat`: null means Off; otherwise exactly
+`{"unit":"days","interval":"14"}` or `{"unit":"months","interval":"1"}`.
+`interval` is a canonical positive decimal string matching `[1-9][0-9]*`.
+It represents a whole number without relying on platform JSON-number precision.
+Reject absent/extra nested fields, unsupported units, JSON numbers (including
+integer, float, and exponent tokens), booleans, blank/zero/negative strings,
+leading zeros, whitespace, signs, decimals, exponents, and nondigit text.
+Capture's title-only request and original 5-field response remain unchanged.
+Enabling/editing repeat does not change the existing optional due date.
+
+Completion PUT requires exactly:
+
+```json
+{"completed":true,"expected_updated_at":"2026-10-05T00:00:00.000000Z","local_date":"2026-10-05"}
+```
+
+`local_date` is required on completion and Undo, including nonrepeating tasks.
+Validate canonical real `YYYY-MM-DD` only; never fall back to server UTC. The
+client supplies its date at the tap, independent of the last list-load date.
+Compute repeating due dates from this date, adding days or clamped months.
+Date overflow returns `422 invalid_request` on field `repeat`, without writes.
+
+Completion atomically retains the original and saves 1 successor. Return only
+the original `TaskDetail`, with `repeat`; the current screen keeps its grey row
+until successful list reload. GETs never create occurrences. Repeated completion
+does not create additional successors. Comparison tokens retain existing rules.
+
+Undo atomically restores the original with its old Heap age and deletes its
+successor only if still unfinished, unchanged, and without any dependency links
+in either direction. A changed/completed/deleted/linked successor returns
+`409 recurrence_undo_conflict`, without writes. The client explains the refusal,
+retains the completed row, and can use ordinary refresh to load saved work.
+Existing `task_conflict`, `task_not_on_heap`, and missing-ID behavior remains.
+
 ## Heap ranking and due dates (approved contract)
 
 `GET /api/v1/heap` requires `local_date` as a query parameter in canonical real-calendar `YYYY-MM-DD` form. Missing, malformed, or noncanonical values return `422 invalid_request`; the server never substitutes its own date. Example: `GET /api/v1/heap?local_date=2026-10-05`. The device supplies its current local calendar date on every list load.

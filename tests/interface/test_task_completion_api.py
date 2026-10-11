@@ -26,7 +26,7 @@ def client_for(database: Path) -> TestClient:
 
 def completion_body(updated_at: str, completed: bool) -> dict[str, object]:
     """Build a completion request using the task's comparison token."""
-    return {"completed": completed, "expected_updated_at": updated_at}
+    return {"completed": completed, "expected_updated_at": updated_at, "local_date": "2026-10-05"}
 
 
 def test_completion_and_undo_keep_task_history_and_unrelated_fields(
@@ -53,6 +53,7 @@ def test_completion_and_undo_keep_task_history_and_unrelated_fields(
             "title": "Repair fence", "priority": 2, "duration_minutes": 30,
             "externally_blocked": True, "project_id": project["id"],
             "due_date": None,
+            "repeat": None,
             "expected_updated_at": detail["updated_at"],
         }
         heap_task = client.put(path + "/organization", json=organization).json()
@@ -114,6 +115,7 @@ def test_completion_noop_requires_current_token_and_stale_token_conflicts(
             "title": task["title"], "priority": 2, "duration_minutes": 30,
             "externally_blocked": False, "project_id": None,
             "due_date": None,
+            "repeat": None,
             "expected_updated_at": task["updated_at"],
         }
         heap_task = client.put(path + "/organization", json=setup).json()
@@ -136,11 +138,11 @@ def test_completion_noop_requires_current_token_and_stale_token_conflicts(
 @pytest.mark.parametrize(
     "body",
     [
-        {"completed": 1, "expected_updated_at": "2026-10-03T12:34:56.123456Z"},
-        {"completed": "true", "expected_updated_at": "2026-10-03T12:34:56.123456Z"},
-        {"completed": True, "expected_updated_at": "2026-10-03T12:34:56Z"},
-        {"completed": True, "expected_updated_at": "2026-10-03T12:34:56.123456Z", "extra": 1},
-        {"expected_updated_at": "2026-10-03T12:34:56.123456Z"},
+        {"completed": 1, "expected_updated_at": "2026-10-03T12:34:56.123456Z", "local_date": "2026-10-05"},
+        {"completed": "true", "expected_updated_at": "2026-10-03T12:34:56.123456Z", "local_date": "2026-10-05"},
+        {"completed": True, "expected_updated_at": "2026-10-03T12:34:56Z", "local_date": "2026-10-05"},
+        {"completed": True, "expected_updated_at": "2026-10-03T12:34:56.123456Z", "local_date": "2026-10-05", "extra": 1},
+        {"expected_updated_at": "2026-10-03T12:34:56.123456Z", "local_date": "2026-10-05"},
     ],
 )
 def test_completion_rejects_non_strict_or_extra_fields(tmp_path: Path, body: dict[str, object]) -> None:
@@ -193,6 +195,7 @@ def test_completion_storage_failure_returns_error_without_changing_task(
             "title": task["title"], "priority": 2, "duration_minutes": 30,
             "externally_blocked": False, "project_id": None,
             "due_date": None,
+            "repeat": None,
             "expected_updated_at": task["updated_at"],
         }
         heap_task = client.put(path + "/organization", json=setup).json()
@@ -230,6 +233,7 @@ def test_completion_advances_token_despite_equal_or_backward_clock(
                 "externally_blocked": False,
                 "project_id": None,
                 "due_date": None,
+                "repeat": None,
                 "expected_updated_at": captured["updated_at"],
             },
         )

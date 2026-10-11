@@ -7,6 +7,7 @@ import threading
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import TypeAlias
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -27,12 +28,16 @@ from heap.logic.duration import Duration
 from heap.logic.priority import Priority
 from heap.logic.project import Project
 from heap.logic.project_operator import ProjectOperator
+from heap.logic.recurrence import RepeatDateOverflowError, RepeatRule, RepeatUnit
 from heap.logic.task import Task, TaskStatus
-from heap.logic.task_operator import TaskOperator
+from heap.logic.task_operator import RecurrenceUndoConflictError, TaskOperator
 from heap.persistence.sqlite_project_store import SQLiteProjectStore
 from heap.persistence.sqlite_task_store import SQLiteTaskStore
 
 logger = logging.getLogger(__name__)
+
+TaskResponse: TypeAlias = dict[str, str | int | bool | None | dict[str, str]]
+TaskListResponse: TypeAlias = dict[str, list[TaskResponse]]
 
 
 def _trim_title(title: str) -> str:
@@ -95,6 +100,33 @@ class ProjectUpdateRequest(ProjectCreateRequest):
     description: StrictStr | None
 
 
+class RepeatRequest(BaseModel):
+    """Validate the exact public repeat-rule shape."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    unit: StrictStr
+    interval: StrictStr
+
+    @field_validator("unit")
+    @classmethod
+    def validate_unit(cls, value: str) -> str:
+        """Allow only supported calendar units."""
+        if value not in {unit.value for unit in RepeatUnit}:
+            raise ValueError("Must be days or months.")
+        return value
+
+    @field_validator("interval")
+    @classmethod
+    def validate_interval(cls, value: str) -> str:
+        """Require a canonical positive decimal interval string."""
+        try:
+            RepeatRule.parse_interval(value)
+        except ValueError as error:
+            raise ValueError(str(error)) from error
+        return value
+
+
 class CompletionRequest(BaseModel):
     """Validate a desired task completion state and its comparison token."""
 
@@ -102,6 +134,19 @@ class CompletionRequest(BaseModel):
 
     completed: StrictBool
     expected_updated_at: StrictStr
+    local_date: StrictStr
+
+    @field_validator("local_date")
+    @classmethod
+    def validate_local_date(cls, value: str) -> str:
+        """Require a canonical real local calendar date."""
+        try:
+            parsed = date.fromisoformat(value)
+        except ValueError as error:
+            raise ValueError("Must be a canonical YYYY-MM-DD date.") from error
+        if parsed.isoformat() != value:
+            raise ValueError("Must be a canonical YYYY-MM-DD date.")
+        return value
 
     @field_validator("expected_updated_at")
     @classmethod
@@ -130,6 +175,7 @@ class OrganizationRequest(BaseModel):
     externally_blocked: StrictBool
     project_id: StrictStr | None
     due_date: StrictStr | None
+    repeat: RepeatRequest | None
 
     @field_validator("due_date")
     @classmethod
@@ -273,7 +319,7 @@ def _serialize_task(task: Task) -> dict[str, str]:
     }
 
 
-def _serialize_inbox_task(task: Task) -> dict[str, str | int | bool | None]:
+def _serialize_inbox_task(task: Task) -> TaskResponse:
     """Return bulk Inbox fields, including required organization and waiting data."""
     return {
         **_serialize_task(task),
@@ -282,6 +328,14 @@ def _serialize_inbox_task(task: Task) -> dict[str, str | int | bool | None]:
         "externally_blocked": task.externally_blocked,
         "project_id": str(task.project_id) if task.project_id is not None else None,
         "due_date": task.due_date.isoformat() if task.due_date is not None else None,
+        "repeat": (
+            {
+                "unit": task.repeat.unit.value,
+                "interval": task.repeat.interval_as_decimal(),
+            }
+            if task.repeat is not None
+            else None
+        ),
     }
 
 
@@ -304,7 +358,7 @@ def _serialize_project(project: Project) -> dict[str, str | None]:
     }
 
 
-def _serialize_task_detail(task: Task) -> dict[str, str | int | bool | None]:
+def _serialize_task_detail(task: Task) -> TaskResponse:
     """Return the exact editable-task detail fields exposed by the contract."""
     return {
         **_serialize_inbox_task(task),
@@ -439,7 +493,7 @@ def create_app(
     @application.get("/api/v1/projects/{project_id}/tasks", response_model=None)
     async def list_project_tasks(
         request: Request, project_id: str
-    ) -> JSONResponse | dict[str, list[dict[str, str | int | bool | None]]]:
+    ) -> JSONResponse | TaskListResponse:
         """Return all project tasks, including completed tasks, oldest-first."""
         parsed_id = _parse_task_id(project_id)
         if parsed_id is None:
@@ -528,9 +582,7 @@ def create_app(
         return {"deleted": True}
 
     @application.get("/api/v1/inbox")
-    async def list_inbox(
-        request: Request,
-    ) -> dict[str, list[dict[str, str | int | bool | None]]]:
+    async def list_inbox(request: Request) -> TaskListResponse:
         """Return the current saved inbox using the authoritative operation."""
         with request.app.state.operation_lock:
             tasks = request.app.state.tasks.list_inbox()
@@ -539,7 +591,7 @@ def create_app(
     @application.get("/api/v1/tasks/{task_id}", response_model=None)
     async def get_task(
         request: Request, task_id: str
-    ) -> JSONResponse | dict[str, str | int | bool | None]:
+    ) -> JSONResponse | TaskResponse:
         """Return fresh saved detail for a valid task UUID."""
         parsed_id = _parse_task_id(task_id)
         if parsed_id is None:
@@ -557,9 +609,7 @@ def create_app(
         return _serialize_task_detail(task)
 
     @application.get("/api/v1/heap", response_model=None)
-    async def list_on_heap(
-        request: Request,
-    ) -> JSONResponse | dict[str, list[dict[str, str | int | bool | None]]]:
+    async def list_on_heap(request: Request) -> JSONResponse | TaskListResponse:
         """Return every qualifying Heap task in policy order for the supplied date."""
         values = request.query_params.getlist("local_date")
         if len(values) != 1:
@@ -583,7 +633,7 @@ def create_app(
     @application.put("/api/v1/tasks/{task_id}/organization", response_model=None)
     async def organize_task(
         request: Request, task_id: str
-    ) -> JSONResponse | dict[str, str | int | bool | None]:
+    ) -> JSONResponse | TaskResponse:
         """Validate and atomically replace the task's organization fields."""
         parsed_id = _parse_task_id(task_id)
         if parsed_id is None:
@@ -625,7 +675,19 @@ def create_app(
                     ),
                     duration=Duration(payload.duration_minutes),
                     externally_blocked=payload.externally_blocked,
-                    due_date=(date.fromisoformat(payload.due_date) if payload.due_date is not None else None),
+                    due_date=(
+                        date.fromisoformat(payload.due_date)
+                        if payload.due_date is not None
+                        else None
+                    ),
+                    repeat=(
+                        RepeatRule(
+                            RepeatUnit(payload.repeat.unit),
+                            RepeatRule.parse_interval(payload.repeat.interval),
+                        )
+                        if payload.repeat is not None
+                        else None
+                    ),
                     project_id=(
                         UUID(payload.project_id)
                         if payload.project_id is not None
@@ -639,7 +701,7 @@ def create_app(
     @application.put("/api/v1/tasks/{task_id}/completion", response_model=None)
     async def update_task_completion(
         request: Request, task_id: str
-    ) -> JSONResponse | dict[str, str | int | bool | None]:
+    ) -> JSONResponse | TaskResponse:
         """Set completion for a saved Heap task using an optimistic token."""
         parsed_id = _parse_task_id(task_id)
         if parsed_id is None:
@@ -671,15 +733,32 @@ def create_app(
                     if current.status is TaskStatus.COMPLETED:
                         task = current
                     else:
-                        task = request.app.state.tasks.complete_on_heap(parsed_id)
+                        task = request.app.state.tasks.complete_on_heap(
+                            parsed_id, date.fromisoformat(payload.local_date)
+                        )
                 elif current.status is TaskStatus.COMPLETED:
                     task = request.app.state.tasks.undo_completion(parsed_id)
                 else:
                     task = current
-            except ValueError:
+            except RepeatDateOverflowError:
+                return _error_response(
+                    422,
+                    "invalid_request",
+                    "Request validation failed.",
+                    [{
+                        "field": "repeat",
+                        "message": "Next due date is outside the supported range.",
+                    }],
+                )
+            except RecurrenceUndoConflictError:
                 return _error_response(
                     409,
-                    "task_not_on_heap",
+                    "recurrence_undo_conflict",
+                    "The successor changed or is linked, so this completion cannot be undone.",
+                )
+            except ValueError:
+                return _error_response(
+                    409, "task_not_on_heap",
                     "Task has no qualifying Heap history to complete or restore.",
                 )
         return _serialize_task_detail(task)

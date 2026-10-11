@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import date, datetime
 from pathlib import Path
@@ -8,6 +9,7 @@ from uuid import UUID
 
 from heap.logic.duration import Duration
 from heap.logic.priority import Priority
+from heap.logic.recurrence import RepeatRule
 from heap.logic.task import Task, TaskStatus
 from heap.logic.task_store import TaskStore
 
@@ -33,7 +35,10 @@ class SQLiteTaskStore(TaskStore):
                 on_deck_since TEXT,
                 completed_at TEXT,
                 externally_blocked INTEGER NOT NULL DEFAULT 0
-                    CHECK (externally_blocked IN (0, 1))
+                    CHECK (externally_blocked IN (0, 1)),
+                repeat TEXT,
+                successor_id TEXT,
+                successor_created_updated_at TEXT
             )
             """
         )
@@ -51,6 +56,9 @@ class SQLiteTaskStore(TaskStore):
                 "externally_blocked",
                 "INTEGER NOT NULL DEFAULT 0 CHECK (externally_blocked IN (0, 1))",
             ),
+            ("repeat", "TEXT"),
+            ("successor_id", "TEXT"),
+            ("successor_created_updated_at", "TEXT"),
         ):
             if column not in columns:
                 self._connection.execute(
@@ -88,8 +96,9 @@ class SQLiteTaskStore(TaskStore):
                 INSERT INTO tasks
                     (id, title, status, created_at, updated_at,
                      priority, duration_minutes, project_id, on_deck_since, completed_at,
-                     externally_blocked, due_date)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     externally_blocked, due_date, repeat, successor_id,
+                     successor_created_updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     title = excluded.title,
                     status = excluded.status,
@@ -101,28 +110,78 @@ class SQLiteTaskStore(TaskStore):
                     on_deck_since = excluded.on_deck_since,
                     completed_at = excluded.completed_at,
                     externally_blocked = excluded.externally_blocked,
-                    due_date = excluded.due_date
+                    due_date = excluded.due_date,
+                    repeat = excluded.repeat,
+                    successor_id = excluded.successor_id,
+                    successor_created_updated_at = excluded.successor_created_updated_at
                 """,
-                [
-                    (
-                        str(task.id),
-                        task.title,
-                        "on_deck"
-                        if task.status is TaskStatus.ON_HEAP
-                        else task.status.value,
-                        task.created_at.isoformat(),
-                        task.updated_at.isoformat(),
-                        task.priority.value if task.priority is not None else None,
-                        task.duration.minutes,
-                        str(task.project_id) if task.project_id is not None else None,
-                        task.on_heap_since.isoformat() if task.on_heap_since else None,
-                        task.completed_at.isoformat() if task.completed_at else None,
-                        task.externally_blocked,
-                        task.due_date.isoformat() if task.due_date else None,
-                    )
-                    for task in tasks
-                ],
+                [self._task_values(task) for task in tasks],
             )
+
+    def save_and_delete(self, task: Task, task_id: UUID) -> None:
+        """Save a restored snapshot and remove its successor atomically."""
+        with self._connection:
+            if self.get(task.id) is None:
+                raise KeyError(task.id)
+            if self.get(task_id) is None:
+                raise KeyError(task_id)
+            cursor = self._connection.execute(
+                """UPDATE tasks SET title = ?, status = ?, created_at = ?, updated_at = ?,
+                   priority = ?, duration_minutes = ?, project_id = ?, on_deck_since = ?,
+                   completed_at = ?, externally_blocked = ?, due_date = ?, repeat = ?,
+                   successor_id = ?, successor_created_updated_at = ? WHERE id = ?""",
+                self._task_values(task)[1:] + (str(task.id),),
+            )
+            if cursor.rowcount == 0:
+                raise KeyError(task.id)
+            cursor = self._connection.execute(
+                "DELETE FROM tasks WHERE id = ?", (str(task_id),)
+            )
+            if cursor.rowcount == 0:
+                raise KeyError(task_id)
+
+    def has_dependency_links(self, task_id: UUID) -> bool:
+        """Check both sides of dependency links for a task."""
+        row = self._connection.execute(
+            """SELECT EXISTS (SELECT 1 FROM task_dependencies
+               WHERE task_id = ? OR prerequisite_id = ?)""",
+            (str(task_id), str(task_id)),
+        ).fetchone()
+        return bool(row[0])
+
+    @staticmethod
+    def _task_values(task: Task) -> tuple[object, ...]:
+        """Convert a task snapshot to the values stored by SQLite."""
+        return (
+            str(task.id),
+            task.title,
+            "on_deck" if task.status is TaskStatus.ON_HEAP else task.status.value,
+            task.created_at.isoformat(),
+            task.updated_at.isoformat(),
+            task.priority.value if task.priority is not None else None,
+            task.duration.minutes,
+            str(task.project_id) if task.project_id else None,
+            task.on_heap_since.isoformat() if task.on_heap_since else None,
+            task.completed_at.isoformat() if task.completed_at else None,
+            task.externally_blocked,
+            task.due_date.isoformat() if task.due_date else None,
+            (
+                json.dumps(
+                    {
+                        "unit": task.repeat.unit.value,
+                        "interval": task.repeat.interval_as_decimal(),
+                    }
+                )
+                if task.repeat is not None
+                else None
+            ),
+            str(task.successor_id) if task.successor_id else None,
+            (
+                task.successor_created_updated_at.isoformat()
+                if task.successor_created_updated_at
+                else None
+            ),
+        )
 
     def delete(self, task_id: UUID) -> None:
         """Remove a task and its dependency links; missing IDs raise KeyError."""
@@ -217,7 +276,8 @@ class SQLiteTaskStore(TaskStore):
             """
             SELECT id, title, status, created_at, updated_at,
                    priority, duration_minutes, project_id, on_deck_since, completed_at,
-                   externally_blocked, due_date
+                   externally_blocked, due_date, repeat, successor_id,
+                   successor_created_updated_at
             FROM tasks WHERE id = ?
             """,
             (str(task_id),),
@@ -232,7 +292,8 @@ class SQLiteTaskStore(TaskStore):
             """
             SELECT id, title, status, created_at, updated_at,
                    priority, duration_minutes, project_id, on_deck_since, completed_at,
-                   externally_blocked, due_date
+                   externally_blocked, due_date, repeat, successor_id,
+                   successor_created_updated_at
             FROM tasks WHERE status != ? ORDER BY id
             """,
             (TaskStatus.COMPLETED.value,),
@@ -245,7 +306,8 @@ class SQLiteTaskStore(TaskStore):
             """
             SELECT id, title, status, created_at, updated_at,
                    priority, duration_minutes, project_id, on_deck_since, completed_at,
-                   externally_blocked, due_date
+                   externally_blocked, due_date, repeat, successor_id,
+                   successor_created_updated_at
             FROM tasks
             WHERE status != ? AND (priority IS NULL OR duration_minutes IS NULL)
             ORDER BY created_at, id
@@ -260,7 +322,8 @@ class SQLiteTaskStore(TaskStore):
             """
             SELECT id, title, status, created_at, updated_at,
                    priority, duration_minutes, project_id, on_deck_since, completed_at,
-                   externally_blocked, due_date
+                   externally_blocked, due_date, repeat, successor_id,
+                   successor_created_updated_at
             FROM tasks
             WHERE status != ? AND priority IS NOT NULL AND duration_minutes IS NOT NULL
             ORDER BY on_deck_since, id
@@ -275,7 +338,8 @@ class SQLiteTaskStore(TaskStore):
             """
             SELECT id, title, status, created_at, updated_at,
                    priority, duration_minutes, project_id, on_deck_since, completed_at,
-                   externally_blocked, due_date
+                   externally_blocked, due_date, repeat, successor_id,
+                   successor_created_updated_at
             FROM tasks WHERE project_id = ? ORDER BY created_at, id
             """,
             (str(project_id),),
@@ -297,9 +361,13 @@ class SQLiteTaskStore(TaskStore):
             str | None,
             int,
             str | None,
+            str | None,
+            str | None,
+            str | None,
         ],
     ) -> Task:
         """Load a snapshot, translating the historical status into heap vocabulary."""
+        repeat_data = json.loads(row[12]) if row[12] is not None else None
         return Task(
             id=UUID(row[0]),
             title=row[1],
@@ -313,6 +381,18 @@ class SQLiteTaskStore(TaskStore):
             completed_at=datetime.fromisoformat(row[9]) if row[9] else None,
             externally_blocked=bool(row[10]),
             due_date=date.fromisoformat(row[11]) if row[11] is not None else None,
+            repeat=(
+                RepeatRule(
+                    unit=repeat_data["unit"],
+                    interval=RepeatRule.parse_interval(repeat_data["interval"]),
+                )
+                if repeat_data is not None
+                else None
+            ),
+            successor_id=UUID(row[13]) if row[13] is not None else None,
+            successor_created_updated_at=(
+                datetime.fromisoformat(row[14]) if row[14] is not None else None
+            ),
         )
 
     def close(self) -> None:

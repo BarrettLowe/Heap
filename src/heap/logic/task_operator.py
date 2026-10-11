@@ -4,10 +4,15 @@ from uuid import UUID, uuid4
 
 from heap.logic.duration import Duration
 from heap.logic.priority import Priority
+from heap.logic.recurrence import RepeatRule
 from heap.logic.project_store import ProjectStore
 from heap.logic.task import Task, TaskStatus
 from heap.logic.task_ranking import rank_heap_tasks
 from heap.logic.task_store import TaskStore
+
+
+class RecurrenceUndoConflictError(ValueError):
+    """Report why an automatically created successor cannot be removed."""
 
 
 def current_time() -> datetime:
@@ -59,38 +64,64 @@ class TaskOperator:
             raise KeyError(project_id)
         return self._store.list_for_project(project_id)
 
-    def complete(self, task_id: UUID) -> Task:
-        """Retain a task as completed; repeated completion leaves it unchanged.
+    def complete(self, task_id: UUID, local_date: date | None = None) -> Task:
+        """Complete a task and atomically create its next occurrence when set.
 
-        Missing task IDs raise KeyError.
+        Missing task IDs raise KeyError; repeating tasks require a device date.
         """
-        task = self._store.get(task_id)
-        if task is None:
-            raise KeyError(task_id)
+        task = self.get(task_id)
         if task.status is TaskStatus.COMPLETED:
             return task
-        now = current_time()
-        task.status = TaskStatus.COMPLETED
-        task.completed_at = now
-        task.updated_at = now
-        self._store.save(task)
-        return task
+        if task.repeat is not None and local_date is None:
+            raise ValueError("Repeating completion requires a local date")
+        return self._complete(task, local_date)
 
-    def complete_on_heap(self, task_id: UUID) -> Task:
-        """Complete a task currently on Heap, retaining its age for undo.
-
-        Missing IDs raise KeyError; tasks without Heap placement raise ValueError.
-        """
+    def complete_on_heap(
+        self, task_id: UUID, local_date: date | None = None
+    ) -> Task:
+        """Complete a Heap task, retaining its age and creating any successor."""
         task = self.get(task_id)
         if task.status is TaskStatus.COMPLETED:
             return task
         if task.status is not TaskStatus.ON_HEAP or task.on_heap_since is None:
             raise ValueError("Only a task on Heap can be completed")
+        if task.repeat is not None and local_date is None:
+            raise ValueError("Repeating completion requires a local date")
+        return self._complete(task, local_date)
+
+    def _complete(self, task: Task, local_date: date | None) -> Task:
+        """Build and save a completion snapshot and optional fresh occurrence."""
+        due_date = (
+            task.repeat.next_due_date(local_date)
+            if task.repeat is not None and local_date is not None
+            else None
+        )
+        successor_qualifies = (
+            task.priority is not None and task.duration is not Duration.UNKNOWN
+        )
         now = current_time()
         task.status = TaskStatus.COMPLETED
         task.completed_at = now
         task.updated_at = max(now, task.updated_at + timedelta(microseconds=1))
-        self._store.save(task)
+        if task.repeat is None:
+            self._store.save(task)
+            return task
+        successor = Task(
+            id=uuid4(),
+            title=task.title,
+            status=(TaskStatus.ON_HEAP if successor_qualifies else TaskStatus.INBOX),
+            created_at=now,
+            updated_at=now,
+            priority=task.priority,
+            duration=task.duration,
+            project_id=task.project_id,
+            on_heap_since=now if successor_qualifies else None,
+            due_date=due_date,
+            repeat=task.repeat,
+        )
+        task.successor_id = successor.id
+        task.successor_created_updated_at = successor.updated_at
+        self._store.save_many([task, successor])
         return task
 
     def undo_completion(self, task_id: UUID) -> Task:
@@ -101,6 +132,18 @@ class TaskOperator:
         task = self.get(task_id)
         if task.status is not TaskStatus.COMPLETED:
             return task
+        successor: Task | None = None
+        if task.successor_id is not None:
+            successor = self._store.get(task.successor_id)
+            if (
+                successor is None
+                or successor.status is TaskStatus.COMPLETED
+                or successor.updated_at != task.successor_created_updated_at
+                or self._store.has_dependency_links(successor.id)
+            ):
+                raise RecurrenceUndoConflictError(
+                    "The successor changed, was completed, or has dependency links"
+                )
         if (
             task.on_heap_since is None
             or task.priority is None
@@ -111,7 +154,12 @@ class TaskOperator:
         task.status = TaskStatus.ON_HEAP
         task.completed_at = None
         task.updated_at = now
-        self._store.save(task)
+        if successor is not None:
+            task.successor_id = None
+            task.successor_created_updated_at = None
+            self._store.save_and_delete(task, successor.id)
+        else:
+            self._store.save(task)
         return task
 
     def delete(self, task_id: UUID) -> None:
@@ -131,7 +179,8 @@ class TaskOperator:
         Missing IDs raise KeyError; self-dependencies and cycles raise ValueError.
         Cycle validation assumes dependency edits do not run concurrently.
         """
-        if self._store.get(task_id) is None:
+        dependent = self._store.get(task_id)
+        if dependent is None:
             raise KeyError(task_id)
         if self._store.get(prerequisite_id) is None:
             raise KeyError(prerequisite_id)
@@ -148,19 +197,26 @@ class TaskOperator:
             if current_id not in visited:
                 visited.add(current_id)
                 pending.extend(self._store.list_dependencies(current_id))
-        self._store.add_dependency(task_id, prerequisite_id, current_time())
+        updated_at = max(
+            current_time(), dependent.updated_at + timedelta(microseconds=1)
+        )
+        self._store.add_dependency(task_id, prerequisite_id, updated_at)
 
     def remove_dependency(self, task_id: UUID, prerequisite_id: UUID) -> None:
         """Remove a prerequisite link; absent links leave timestamps unchanged.
 
         Missing task or prerequisite IDs raise KeyError.
         """
-        if self._store.get(task_id) is None:
+        dependent = self._store.get(task_id)
+        if dependent is None:
             raise KeyError(task_id)
         if self._store.get(prerequisite_id) is None:
             raise KeyError(prerequisite_id)
         if prerequisite_id in self._store.list_dependencies(task_id):
-            self._store.remove_dependency(task_id, prerequisite_id, current_time())
+            updated_at = max(
+                current_time(), dependent.updated_at + timedelta(microseconds=1)
+            )
+            self._store.remove_dependency(task_id, prerequisite_id, updated_at)
 
     def list_dependencies(self, task_id: UUID) -> list[UUID]:
         """Return prerequisite IDs in ascending ID order; missing IDs raise KeyError."""
@@ -194,6 +250,7 @@ class TaskOperator:
         externally_blocked: bool,
         project_id: UUID | None = None,
         due_date: date | None,
+        repeat: RepeatRule | None = None,
     ) -> Task:
         """Replace editor fields together and derive placement from requirements.
 
@@ -218,6 +275,7 @@ class TaskOperator:
                 externally_blocked=externally_blocked,
                 project_id=project_id,
                 due_date=due_date,
+                repeat=repeat,
             ),
         )
 

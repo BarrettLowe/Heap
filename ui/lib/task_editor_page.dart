@@ -32,17 +32,21 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
   late final TaskEditorController _controller;
   final _title = TextEditingController();
   final _dueDateText = TextEditingController();
+  final _repeatIntervalText = TextEditingController();
   final _titleFocus = FocusNode();
   final _headingFocus = FocusNode();
   final _priorityFocus = FocusNode();
   final _durationFocus = FocusNode();
   final _dueDateFocus = FocusNode();
+  final _repeatFocus = FocusNode();
+  final _repeatIntervalFocus = FocusNode();
   final _waitingFocus = FocusNode();
   FocusNode? _lastFieldFocus;
   final _scroll = ScrollController();
   bool _allowPop = false;
   bool _dialogOpen = false;
   bool _titleTouched = false;
+  String? _lastRepeatIntervalText;
   List<Project> _projects = const [];
   bool _projectsLoading = false;
   bool _projectsFailed = false;
@@ -54,6 +58,8 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
       _titleFocus,
       _priorityFocus,
       _durationFocus,
+      _repeatFocus,
+      _repeatIntervalFocus,
       _dueDateFocus,
       _waitingFocus,
     ]) {
@@ -86,6 +92,13 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
       ? 'None'
       : MaterialLocalizations.of(context).formatCompactDate(date.toLocalDate());
 
+  String _repeatLabel(OrganizationDraft draft) {
+    if (!draft.repeatEnabled) return 'Off';
+    final unit = draft.repeatUnit == 'days' ? 'day' : 'month';
+    final plural = draft.repeatIntervalText == '1' ? '' : 's';
+    return 'Every ${draft.repeatIntervalText} $unit$plural';
+  }
+
   void _changed() {
     if (!mounted) return;
     final draft = _controller.draft;
@@ -94,6 +107,13 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
       final date = draft.dueDate;
       final text = date == null ? '' : _dueDateLabel(date);
       if (_dueDateText.text != text) _dueDateText.text = text;
+      if (draft.repeatEnabled) {
+        final repeatInterval = draft.repeatIntervalText ?? '';
+        _lastRepeatIntervalText = repeatInterval;
+        if (_repeatIntervalText.text != repeatInterval) {
+          _repeatIntervalText.text = repeatInterval;
+        }
+      }
     }
     setState(() {});
   }
@@ -104,11 +124,14 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
     _controller.dispose();
     _title.dispose();
     _dueDateText.dispose();
+    _repeatIntervalText.dispose();
     _titleFocus.dispose();
     _headingFocus.dispose();
     _priorityFocus.dispose();
     _durationFocus.dispose();
     _dueDateFocus.dispose();
+    _repeatFocus.dispose();
+    _repeatIntervalFocus.dispose();
     _waitingFocus.dispose();
     _scroll.dispose();
     super.dispose();
@@ -184,6 +207,10 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
         ? _priorityFocus
         : errors.containsKey('duration_minutes')
         ? _durationFocus
+        : errors.containsKey('repeat') ||
+              (_controller.draft?.repeatEnabled == true &&
+                  _controller.draft?.repeatIntervalValid == false)
+        ? _repeatIntervalFocus
         : errors.containsKey('due_date')
         ? _dueDateFocus
         : errors.containsKey('externally_blocked')
@@ -457,6 +484,8 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
         },
       ),
       const SizedBox(height: 16),
+      _repeatFields(draft, controller.editable),
+      const SizedBox(height: 16),
       _dueDateField(draft, controller.editable),
       const SizedBox(height: 16),
       CheckboxListTile(
@@ -485,6 +514,80 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
       ],
     ]);
     return fields;
+  }
+
+  Widget _repeatFields(OrganizationDraft draft, bool editable) {
+    final intervalError =
+        _controller.fieldErrors['repeat'] ??
+        (draft.repeatEnabled && !draft.repeatIntervalValid
+            ? 'Enter a whole number greater than 0.'
+            : null);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DropdownButtonFormField<String>(
+          key: ValueKey('editor-repeat-${draft.repeatUnit ?? 'off'}'),
+          initialValue: draft.repeatUnit ?? '',
+          focusNode: _repeatFocus,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            labelText: 'Repeat',
+            border: OutlineInputBorder(),
+          ),
+          items: const [
+            DropdownMenuItem(value: '', child: Text('Off')),
+            DropdownMenuItem(value: 'days', child: Text('Days')),
+            DropdownMenuItem(value: 'months', child: Text('Months')),
+          ],
+          onChanged: editable
+              ? (value) {
+                  if (value == null) return;
+                  final unit = value.isEmpty ? null : value;
+                  if (unit == null) {
+                    _lastRepeatIntervalText =
+                        draft.repeatIntervalText ?? _repeatIntervalText.text;
+                  } else {
+                    _lastRepeatIntervalText ??= draft.repeatIntervalText ?? '1';
+                  }
+                  _controller.edit(
+                    repeatUnit: unit,
+                    setRepeatUnit: true,
+                    repeatIntervalText: unit == null
+                        ? null
+                        : _lastRepeatIntervalText,
+                    setRepeatInterval: unit != null,
+                  );
+                }
+              : null,
+        ),
+        if (draft.repeatEnabled) ...[
+          const SizedBox(height: 16),
+          TextFormField(
+            key: const Key('editor-repeat-interval'),
+            controller: _repeatIntervalText,
+            focusNode: _repeatIntervalFocus,
+            enabled: editable,
+            keyboardType: const TextInputType.numberWithOptions(
+              decimal: false,
+              signed: false,
+            ),
+            textInputAction: TextInputAction.done,
+            decoration: InputDecoration(
+              labelText: 'Interval',
+              border: const OutlineInputBorder(),
+              errorText: intervalError,
+            ),
+            onChanged: (value) {
+              _lastRepeatIntervalText = value;
+              _controller.edit(
+                repeatIntervalText: value,
+                setRepeatInterval: true,
+              );
+            },
+          ),
+        ],
+      ],
+    );
   }
 
   Widget _dueDateField(OrganizationDraft draft, bool editable) {
@@ -750,6 +853,7 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
       Text(
         'Duration: ${draft.durationMinutes == null ? 'Unknown' : formatDuration(draft.durationMinutes!)}',
       ),
+      Text('Repeat: ${_repeatLabel(draft)}'),
       Text('Due date: ${_dueDateLabel(draft.dueDate)}'),
       Text(
         'Awaiting external dependencies: ${draft.externallyBlocked ? 'Yes' : 'No'}',

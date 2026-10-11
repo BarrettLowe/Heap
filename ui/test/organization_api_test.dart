@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:heap_app/heap_api.dart';
 import 'package:heap_app/task_detail.dart';
+import 'package:heap_app/repeat_rule.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
@@ -111,6 +112,7 @@ void main() {
         'externally_blocked': true,
         'project_id': null,
         'due_date': null,
+        'repeat': null,
         'expected_updated_at': '2026-10-03T12:34:56.000000Z',
       });
       return http.Response(
@@ -122,6 +124,122 @@ void main() {
     expect((await api.saveOrganization(command())).externallyBlocked, true);
     client.close();
   });
+  test(
+    'organization PUT transports a repeat rule without changing due date',
+    () async {
+      final original = detail(dueDate: '2026-10-05');
+      final submission = OrganizationSubmission(
+        original: original,
+        draft: OrganizationDraft(
+          title: original.title,
+          externallyBlocked: original.externallyBlocked,
+          projectId: original.projectId,
+          dueDate: original.dueDate,
+          repeatUnit: 'months',
+          repeatIntervalText: '2',
+        ),
+      );
+      final client = MockClient((request) async {
+        expect(jsonDecode(request.body)['repeat'], {
+          'unit': 'months',
+          'interval': '2',
+        });
+        expect(jsonDecode(request.body)['due_date'], '2026-10-05');
+        return http.Response(
+          jsonEncode(
+            detailJson(
+              dueDate: '2026-10-05',
+              repeat: RepeatRule(unit: 'months', interval: '2'),
+            ),
+          ),
+          200,
+        );
+      });
+      final api = HeapApi(client: client, baseUri: Uri.parse('http://test'));
+      expect(
+        (await api.saveOrganization(submission)).repeat,
+        submission.draft.repeat,
+      );
+      client.close();
+    },
+  );
+
+  test(
+    'large interval strings survive detail, Inbox, and Heap response decoding',
+    () async {
+      for (final interval in [
+        '9007199254740993',
+        List.filled(400, '9').join(),
+      ]) {
+        final repeat = RepeatRule(unit: 'days', interval: interval);
+        final client = MockClient((request) async {
+          if (request.url.path == '/api/v1/inbox') {
+            return http.Response(
+              jsonEncode({
+                'items': [detailJson(repeat: repeat)],
+              }),
+              200,
+            );
+          }
+          if (request.url.path == '/api/v1/heap') {
+            return http.Response(
+              jsonEncode({
+                'items': [
+                  detailJson(priority: 2, duration: 30, repeat: repeat),
+                ],
+              }),
+              200,
+            );
+          }
+          return http.Response(jsonEncode(detailJson(repeat: repeat)), 200);
+        });
+        final api = HeapApi(client: client, baseUri: Uri.parse('http://test'));
+        expect((await api.getTask(taskId)).repeat?.interval, interval);
+        expect((await api.listInbox()).single.repeat?.interval, interval);
+        expect(
+          (await api.listOnHeap(localDate: '2026-10-05'))
+              .single
+              .repeat
+              ?.interval,
+          interval,
+        );
+        client.close();
+      }
+    },
+  );
+
+  test(
+    'large interval JSON remains exact and confirms a normal Save',
+    () async {
+      for (final interval in [
+        '9007199254740993',
+        List.filled(400, '9').join(),
+      ]) {
+        final original = detail();
+        final submission = OrganizationSubmission(
+          original: original,
+          draft: OrganizationDraft(
+            title: original.title,
+            externallyBlocked: original.externallyBlocked,
+            projectId: original.projectId,
+            repeatUnit: 'months',
+            repeatIntervalText: interval,
+          ),
+        );
+        final repeat = RepeatRule(unit: 'months', interval: interval);
+        final client = MockClient((request) async {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          expect(body['repeat'], {'unit': 'months', 'interval': interval});
+          return http.Response(jsonEncode(detailJson(repeat: repeat)), 200);
+        });
+        final api = HeapApi(client: client, baseUri: Uri.parse('http://test'));
+        final saved = await api.saveOrganization(submission);
+        expect(saved.repeat?.interval, interval);
+        client.close();
+      }
+    },
+  );
+
   for (final projectId in [null, assignedProjectId]) {
     test(
       'fresh project association $projectId is preserved in unchanged and edited PUT',
@@ -180,6 +298,7 @@ void main() {
       'on_heap_since',
       'externally_blocked',
       'project_id',
+      'repeat',
     ]) {
       final json = detailJson()..remove(field);
       expect(() => TaskDetail.fromJson(json), throwsFormatException);
@@ -273,6 +392,7 @@ void main() {
                   'field': 'externally_blocked',
                   'message': 'Must be a boolean.',
                 },
+                {'field': 'repeat', 'message': 'Invalid repeat rule.'},
               ],
             },
           }),
@@ -292,11 +412,17 @@ void main() {
         await expectLater(
           api.getTask(taskId),
           throwsA(
-            isA<HeapApiException>().having(
-              (e) => e.fieldErrors['externally_blocked'],
-              'flag error',
-              'Must be a boolean.',
-            ),
+            isA<HeapApiException>()
+                .having(
+                  (e) => e.fieldErrors['externally_blocked'],
+                  'flag error',
+                  'Must be a boolean.',
+                )
+                .having(
+                  (e) => e.fieldErrors['repeat'],
+                  'repeat error',
+                  'Invalid repeat rule.',
+                ),
           ),
         );
       }
@@ -357,6 +483,7 @@ void main() {
         'priority',
         'duration_minutes',
         'externally_blocked',
+        'repeat',
       ]) {
         final json = detailJson()..remove(field);
         final client = MockClient(

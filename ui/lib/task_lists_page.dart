@@ -495,6 +495,7 @@ class _TaskListsPageState extends State<TaskListsPage>
     onCheckCompletion: heap ? _heap.checkCompletion : null,
     completionChecking: heap ? _heap.isChecking : null,
     completionError: heap ? _heap.errorFor : null,
+    completionErrorCode: heap ? _heap.errorCodeFor : null,
     rowKey: (id) => _key(id, heap),
     rowFocus: (id) => _focus(id, heap),
     organizationNotice: _noticePanel(),

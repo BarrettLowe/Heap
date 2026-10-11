@@ -1,4 +1,5 @@
 import 'calendar_date.dart';
+import 'repeat_rule.dart';
 
 const priorityLabels = <int, String>{
   1: 'P1 Critical',
@@ -36,6 +37,7 @@ class InboxTask {
     this.durationMinutes,
     this.externallyBlocked = false,
     this.dueDate,
+    this.repeat,
   });
   final String id;
   final String title;
@@ -46,6 +48,7 @@ class InboxTask {
   final int? durationMinutes;
   final bool externallyBlocked;
   final CalendarDate? dueDate;
+  final RepeatRule? repeat;
 
   factory InboxTask.fromJson(
     Object? value, {
@@ -76,6 +79,7 @@ class InboxTask {
             'duration_minutes',
             'externally_blocked',
             'due_date',
+            'repeat',
           ],
         })) {
       throw const FormatException('Task is missing required fields.');
@@ -89,6 +93,7 @@ class InboxTask {
     final duration = metadata ? value['duration_minutes'] : null;
     final waiting = metadata ? value['externally_blocked'] : false;
     final dueDateValue = metadata ? value['due_date'] : null;
+    final repeatValue = metadata ? value['repeat'] : null;
     if (id is! String ||
         !_uuidPattern.hasMatch(id) ||
         title is! String ||
@@ -108,6 +113,9 @@ class InboxTask {
     final dueDate = dueDateValue == null
         ? null
         : CalendarDate.parse(dueDateValue as String);
+    final repeat = metadata && repeatValue != null
+        ? RepeatRule.fromJson(repeatValue)
+        : null;
     final createdAt = parseUtcTimestamp(created);
     final updatedAt = parseUtcTimestamp(updated);
     if ((!metadata && created != updated) ||
@@ -130,8 +138,39 @@ class InboxTask {
       durationMinutes: duration as int?,
       externallyBlocked: waiting,
       dueDate: dueDate,
+      repeat: repeat,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      other.runtimeType == runtimeType &&
+      other is InboxTask &&
+      other.id == id &&
+      other.title == title &&
+      other.status == status &&
+      other.createdAt == createdAt &&
+      other.updatedAt == updatedAt &&
+      other.priority == priority &&
+      other.durationMinutes == durationMinutes &&
+      other.externallyBlocked == externallyBlocked &&
+      other.dueDate == dueDate &&
+      other.repeat == repeat;
+
+  @override
+  int get hashCode => Object.hash(
+    runtimeType,
+    id,
+    title,
+    status,
+    createdAt,
+    updatedAt,
+    priority,
+    durationMinutes,
+    externallyBlocked,
+    dueDate,
+    repeat,
+  );
 
   static DateTime parseUtcTimestamp(String value) {
     if (!_timestampPattern.hasMatch(value)) {

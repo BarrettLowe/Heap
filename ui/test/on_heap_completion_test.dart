@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:heap_app/heap_api.dart';
 import 'package:heap_app/on_heap_controller.dart';
+import 'package:heap_app/repeat_rule.dart';
 import 'package:heap_app/task_detail.dart';
 
 const id = 'd4be2fc9-49b7-46a6-9981-1f063eed03ea';
@@ -11,6 +12,7 @@ TaskDetail task(
   String? token,
   String taskId = id,
   String since = '2026-10-01T12:34:56.123456Z',
+  RepeatRule? repeat,
 }) => TaskDetail.fromJson({
   'id': taskId,
   'title': 'Keep age',
@@ -23,12 +25,14 @@ TaskDetail task(
   'on_heap_since': since,
   'project_id': null,
   'due_date': null,
+  'repeat': repeat?.toJson(),
 });
 
 class Service implements OrganizationService {
   List<TaskDetail> items = [task('on_heap')];
   Future<List<TaskDetail>> Function()? onList;
   Future<TaskDetail> Function(TaskDetail, {required bool completed})? onToggle;
+  final completionDates = <String>[];
   int puts = 0;
   int gets = 0;
   final localDates = <String>[];
@@ -37,8 +41,10 @@ class Service implements OrganizationService {
   Future<TaskDetail> setCompletion(
     TaskDetail original, {
     required bool completed,
+    required String localDate,
   }) {
     puts++;
+    completionDates.add(localDate);
     return onToggle?.call(original, completed: completed) ??
         Future.value(
           task(
@@ -66,6 +72,30 @@ class Service implements OrganizationService {
 }
 
 void main() {
+  test(
+    'completed repeat stays on its original row until authoritative reload',
+    () async {
+      final repeat = RepeatRule(unit: 'days', interval: '14');
+      const successorId = '00000000-0000-4000-8000-000000000005';
+      final predecessor = task('on_heap', repeat: repeat);
+      final successor = task('on_heap', taskId: successorId, repeat: repeat);
+      final service = Service()..items = [predecessor];
+      service.onToggle = (_, {required completed}) async =>
+          task('completed', repeat: repeat);
+      final controller = OnHeapController(service);
+      await controller.load();
+      await controller.toggleCompletion(id);
+      expect(controller.tasks, hasLength(1));
+      expect(controller.tasks.single.id, id);
+      expect(controller.tasks.single.status, 'completed');
+      expect(controller.tasks.single.repeat, repeat);
+      service.items = [successor];
+      await controller.load();
+      expect(controller.tasks.map((item) => item.id), [successorId]);
+      controller.dispose();
+    },
+  );
+
   test('each load captures the injected device-local date once', () async {
     var now = DateTime(2026, 10, 5, 23, 59);
     final service = Service();
@@ -74,6 +104,18 @@ void main() {
     now = DateTime(2026, 10, 6, 0, 1);
     await controller.load();
     expect(service.localDates, ['2026-10-05', '2026-10-06']);
+    controller.dispose();
+  });
+
+  test('completion uses the injected local date captured at tap, not the last load date', () async {
+    var now = DateTime(2026, 10, 5, 23, 59);
+    final service = Service();
+    final controller = OnHeapController(service, clock: () => now);
+    await controller.load();
+    expect(controller.lastSuccessfulLoadDate.toString(), '2026-10-05');
+    now = DateTime(2026, 10, 6, 0, 1);
+    await controller.toggleCompletion(id);
+    expect(service.completionDates, ['2026-10-06']);
     controller.dispose();
   });
 
@@ -156,6 +198,38 @@ void main() {
       controller.dispose();
     },
   );
+
+  test('recurrence undo conflict keeps grey row and exposes specific error without retry', () async {
+    final service = Service();
+    final controller = OnHeapController(service);
+    await controller.load();
+    await controller.toggleCompletion(id);
+    service.onToggle = (_, {required completed}) => Future.error(
+      const HeapApiException(
+        'Can\'t undo completion because the next occurrence was changed or linked to another task. The completed task is unchanged.',
+        statusCode: 409,
+        code: 'recurrence_undo_conflict',
+      ),
+    );
+    await controller.toggleCompletion(id);
+    expect(controller.tasks.single.status, 'completed');
+    expect(
+      controller.errorFor(id),
+      contains('next occurrence was changed or linked to another task'),
+    );
+    expect(controller.errorCodeFor(id), 'recurrence_undo_conflict');
+    expect(service.puts, 2);
+    service.items = [
+      task('on_heap', taskId: '00000000-0000-4000-8000-000000000006'),
+    ];
+    await controller.load();
+    expect(controller.tasks.map((item) => item.id), [
+      '00000000-0000-4000-8000-000000000006',
+    ]);
+    expect(controller.errorFor(id), isNull);
+    expect(service.puts, 2);
+    controller.dispose();
+  });
 
   test('unknown write stays locked until successful refresh; failed refresh retains row', () async {
     final service = Service();

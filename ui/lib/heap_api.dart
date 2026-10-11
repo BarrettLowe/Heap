@@ -44,6 +44,7 @@ abstract interface class OrganizationService {
   Future<TaskDetail> setCompletion(
     TaskDetail original, {
     required bool completed,
+    required String localDate,
   });
 }
 
@@ -227,7 +228,12 @@ class HeapApi implements InboxService, OrganizationService, ProjectService {
   Future<TaskDetail> setCompletion(
     TaskDetail original, {
     required bool completed,
+    required String localDate,
   }) async {
+    final parsedLocalDate = CalendarDate.parse(localDate).toString();
+    if (parsedLocalDate != localDate) {
+      throw const FormatException('Invalid canonical local date.');
+    }
     final expectedStatus = completed ? 'completed' : 'on_heap';
     if (original.status != (completed ? 'on_heap' : 'completed') ||
         original.onHeapSince == null) {
@@ -243,6 +249,7 @@ class HeapApi implements InboxService, OrganizationService, ProjectService {
             body: jsonEncode({
               'completed': completed,
               'expected_updated_at': original.updatedAtToken,
+              'local_date': localDate,
             }),
           )
           .timeout(timeout);
@@ -261,7 +268,8 @@ class HeapApi implements InboxService, OrganizationService, ProjectService {
           detail.externallyBlocked != original.externallyBlocked ||
           detail.onHeapSince != original.onHeapSince ||
           detail.projectId != original.projectId ||
-          detail.dueDate != original.dueDate) {
+          detail.dueDate != original.dueDate ||
+          detail.repeat != original.repeat) {
         throw const FormatException('Invalid completion response.');
       }
       return detail;
@@ -394,6 +402,7 @@ class HeapApi implements InboxService, OrganizationService, ProjectService {
                   'duration_minutes',
                   'externally_blocked',
                   'due_date',
+                  'repeat',
                 }.contains(field['field']) &&
                 field['message'] is String) {
               fields[field['field'] as String] = field['message'] as String;
@@ -404,8 +413,11 @@ class HeapApi implements InboxService, OrganizationService, ProjectService {
     } on FormatException {
       // HTTP rejection still preserves the draft when the error body is invalid.
     }
+    final message = code == 'recurrence_undo_conflict'
+        ? 'Can\'t undo completion because the next occurrence was changed or linked to another task. The completed task is unchanged. Refresh to see the current tasks.'
+        : _messageFor(response.statusCode);
     return HeapApiException(
-      _messageFor(response.statusCode),
+      message,
       statusCode: response.statusCode,
       code: code,
       fieldErrors: Map.unmodifiable(fields),

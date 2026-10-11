@@ -35,6 +35,7 @@ void main() {
       'updated_at': '2026-10-03T12:34:56.000000Z',
     });
     expect(captured.dueDate, isNull);
+    expect(captured.repeat, isNull);
     expect(
       InboxTask.fromJson(detailJson(dueDate: '2026-10-05')).dueDate,
       CalendarDate.parse('2026-10-05'),

@@ -16,6 +16,7 @@ TaskDetail task({String? dueDate, String status = 'on_heap'}) =>
       'project_id': null,
       'on_heap_since': status == 'inbox' ? null : '2026-10-03T12:34:56.000000Z',
       'due_date': dueDate,
+      'repeat': null,
     });
 
 void main() {

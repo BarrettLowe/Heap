@@ -1,5 +1,6 @@
 import 'package:heap_app/heap_api.dart';
 import 'package:heap_app/task_detail.dart';
+import 'package:heap_app/repeat_rule.dart';
 
 const taskId = 'd4be2fc9-49b7-46a6-9981-1f063eed03ea';
 const assignedProjectId = '00000000-0000-0000-0000-000000000001';
@@ -15,6 +16,7 @@ Map<String, Object?> detailJson({
   String updated = '2026-10-03T12:34:56.000000Z',
   String? since,
   String? dueDate,
+  RepeatRule? repeat,
 }) {
   final placement =
       status ?? (priority != null && duration != null ? 'on_heap' : 'inbox');
@@ -29,6 +31,7 @@ Map<String, Object?> detailJson({
     'externally_blocked': waiting,
     'project_id': projectId,
     'due_date': dueDate,
+    'repeat': repeat?.toJson(),
     'on_heap_since': since ?? (placement == 'on_heap' ? updated : null),
   };
 }
@@ -42,6 +45,8 @@ TaskDetail detail({
   int? duration,
   bool waiting = false,
   String updated = '2026-10-03T12:34:56.000000Z',
+  RepeatRule? repeat,
+  String? dueDate,
 }) => TaskDetail.fromJson(
   detailJson(
     id: id,
@@ -52,6 +57,8 @@ TaskDetail detail({
     duration: duration,
     waiting: waiting,
     updated: updated,
+    repeat: repeat,
+    dueDate: dueDate,
   ),
 );
 
@@ -83,6 +90,7 @@ class FakeOrganization implements OrganizationService {
   Future<TaskDetail> Function(TaskDetail, {required bool completed})?
   onCompletion;
   int completionWrites = 0;
+  final completionDates = <String>[];
   Future<List<TaskDetail>> Function()? onList;
   String? lastLocalDate;
   OrganizationSubmission? lastSubmission;
@@ -106,6 +114,8 @@ class FakeOrganization implements OrganizationService {
             duration: submission.draft.durationMinutes,
             waiting: submission.draft.externallyBlocked,
             status: submission.expectedStatus,
+            repeat: submission.draft.repeat,
+            dueDate: submission.draft.dueDate?.toString(),
           ),
         );
   }
@@ -114,8 +124,10 @@ class FakeOrganization implements OrganizationService {
   Future<TaskDetail> setCompletion(
     TaskDetail original, {
     required bool completed,
+    required String localDate,
   }) {
     completionWrites++;
+    completionDates.add(localDate);
     return onCompletion?.call(original, completed: completed) ??
         Future.value(
           TaskDetail.fromJson({
@@ -130,6 +142,7 @@ class FakeOrganization implements OrganizationService {
             'project_id': original.projectId,
             'on_heap_since': formatUtcTimestamp(original.onHeapSince!),
             'due_date': original.dueDate?.toString(),
+            'repeat': original.repeat?.toJson(),
           }),
         );
   }

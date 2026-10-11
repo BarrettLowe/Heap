@@ -20,6 +20,7 @@ Map<String, Object?> taskJson(String status) => {
   'externally_blocked': true,
   'project_id': null,
   'due_date': null,
+  'repeat': null,
   'on_heap_since': token,
 };
 
@@ -37,13 +38,14 @@ void main() {
         expect(jsonDecode(request.body), {
           'completed': true,
           'expected_updated_at': token,
+          'local_date': '2026-10-05',
         });
         return http.Response(jsonEncode(taskJson('completed')), 200);
       });
       final saved = await HeapApi(
         client: client,
         baseUri: Uri.parse('http://localhost'),
-      ).setCompletion(original(), completed: true);
+      ).setCompletion(original(), completed: true, localDate: '2026-10-05');
       expect(saved.status, 'completed');
       expect(saved.onHeapSince, original().onHeapSince);
       expect(saved.title, original().title);
@@ -76,11 +78,85 @@ void main() {
           baseUri: Uri.parse('http://localhost'),
         );
         await expectLater(
-          api.setCompletion(original(), completed: true),
+          api.setCompletion(
+            original(),
+            completed: true,
+            localDate: '2026-10-05',
+          ),
           throwsA(isA<HeapApiException>()),
         );
         client.close();
       }
+    },
+  );
+
+  test('completion rejects invalid local dates before sending and preserves repeat on response', () async {
+    var requests = 0;
+    final repeat = {'unit': 'months', 'interval': '1'};
+    final client = MockClient((request) async {
+      requests++;
+      return http.Response(
+        jsonEncode({...taskJson('completed'), 'repeat': repeat}),
+        200,
+      );
+    });
+    final api = HeapApi(client: client, baseUri: Uri.parse('http://localhost'));
+    final recurring = TaskDetail.fromJson({
+      ...taskJson('on_heap'),
+      'repeat': repeat,
+    });
+    await expectLater(
+      api.setCompletion(recurring, completed: true, localDate: '2026-02-30'),
+      throwsFormatException,
+    );
+    expect(requests, 0);
+    final result = await api.setCompletion(
+      recurring,
+      completed: true,
+      localDate: '2026-10-06',
+    );
+    expect(result.repeat, recurring.repeat);
+    expect(requests, 1);
+    client.close();
+  });
+
+  test(
+    'guarded recurrence Undo exposes its specific conflict code and message',
+    () async {
+      final client = MockClient(
+        (_) async => http.Response(
+          jsonEncode({
+            'error': {
+              'code': 'recurrence_undo_conflict',
+              'message': 'generic',
+              'fields': [],
+            },
+          }),
+          409,
+        ),
+      );
+      final completed = TaskDetail.fromJson({
+        ...taskJson('completed'),
+        'on_heap_since': token,
+      });
+      await expectLater(
+        HeapApi(
+          client: client,
+          baseUri: Uri.parse('http://localhost'),
+        ).setCompletion(completed, completed: false, localDate: '2026-10-05'),
+        throwsA(
+          isA<HeapApiException>()
+              .having((error) => error.code, 'code', 'recurrence_undo_conflict')
+              .having(
+                (error) => error.message,
+                'message',
+                contains(
+                  'next occurrence was changed or linked to another task',
+                ),
+              ),
+        ),
+      );
+      client.close();
     },
   );
 
@@ -89,6 +165,7 @@ void main() {
       expect(jsonDecode(request.body), {
         'completed': false,
         'expected_updated_at': '2026-10-04T12:34:56.123456Z',
+        'local_date': '2026-10-05',
       });
       return http.Response(jsonEncode(taskJson('on_heap')), 200);
     });
@@ -99,6 +176,7 @@ void main() {
         ).setCompletion(
           TaskDetail.fromJson(taskJson('completed')),
           completed: false,
+          localDate: '2026-10-05',
         );
     expect(saved.status, 'on_heap');
     expect(saved.onHeapSince, original().onHeapSince);

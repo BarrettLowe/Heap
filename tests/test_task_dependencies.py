@@ -1,7 +1,7 @@
 import sqlite3
 from contextlib import closing
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -58,8 +58,10 @@ def test_multiple_dependencies_and_shared_prerequisite_survive_reopening(
         assert tasks.list_dependencies(paint.id) == [drywall.id, supplies.id]
         assert tasks.list_dependencies(shelves.id) == [drywall.id]
         assert tasks.list_dependencies(drywall.id) == []
-        assert store.get(paint.id) == replace(before, updated_at=EDITED)
-        assert store.get(shelves.id) == replace(shelves, updated_at=EDITED)
+        saved_paint = store.get(paint.id)
+        saved_shelves = store.get(shelves.id)
+        assert saved_paint == replace(before, updated_at=EDITED + timedelta(microseconds=1))
+        assert saved_shelves == replace(shelves, updated_at=EDITED)
         assert store.get(drywall.id) == drywall
         assert store.get(supplies.id) == supplies
         listed = tasks.list_dependencies(paint.id)

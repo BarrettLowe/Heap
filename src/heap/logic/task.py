@@ -5,6 +5,7 @@ from uuid import UUID
 
 from heap.logic.duration import Duration
 from heap.logic.priority import Priority
+from heap.logic.recurrence import RepeatRule
 
 
 class TaskStatus(StrEnum):
@@ -31,3 +32,6 @@ class Task:
     completed_at: datetime | None = None
     externally_blocked: bool = False
     due_date: date | None = None
+    repeat: RepeatRule | None = None
+    successor_id: UUID | None = None
+    successor_created_updated_at: datetime | None = None

@@ -45,6 +45,7 @@ def organization_body(
         "externally_blocked": waiting,
         "project_id": None,
         "due_date": None,
+        "repeat": None,
         "expected_updated_at": updated_at,
     }
 
@@ -68,6 +69,7 @@ def test_detail_lists_and_atomic_save_return_exact_snapshots(
             "externally_blocked": False,
             "project_id": None,
             "due_date": None,
+            "repeat": None,
         }
         assert client.get("/api/v1/inbox").json() == {"items": [inbox_item]}
         assert client.get(path).json() == {**inbox_item, "on_heap_since": None}
@@ -88,6 +90,7 @@ def test_detail_lists_and_atomic_save_return_exact_snapshots(
             "externally_blocked": True,
             "project_id": None,
             "due_date": None,
+            "repeat": None,
             "on_heap_since": "2026-10-04T09:00:00.123456Z",
         }
         assert client.get(path).json() == saved

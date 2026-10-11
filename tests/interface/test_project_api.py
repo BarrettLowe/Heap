@@ -71,6 +71,7 @@ def test_project_crud_and_full_task_view_round_trip(
                 "externally_blocked": False,
                 "project_id": project["id"],
                 "due_date": None,
+                "repeat": None,
                 "expected_updated_at": captured["updated_at"],
             },
         )
@@ -137,6 +138,7 @@ def test_project_delete_removes_assigned_tasks_and_dependencies_atomically(
                     "externally_blocked": False,
                     "project_id": project_id,
                     "due_date": None,
+                    "repeat": None,
                     "expected_updated_at": task["updated_at"],
                 },
             )

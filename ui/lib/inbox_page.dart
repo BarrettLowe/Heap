@@ -33,6 +33,7 @@ class TaskListBody extends StatelessWidget {
     this.onCheckCompletion,
     this.completionChecking,
     this.completionError,
+    this.completionErrorCode,
   });
   final bool onHeap;
   final List<InboxTask> tasks;
@@ -60,6 +61,7 @@ class TaskListBody extends StatelessWidget {
   final ValueChanged<String>? onCheckCompletion;
   final bool Function(String)? completionChecking;
   final String? Function(String)? completionError;
+  final String? Function(String)? completionErrorCode;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -246,6 +248,7 @@ class TaskListBody extends StatelessWidget {
                   completionChecking:
                       completionChecking?.call(task.id) ?? false,
                   completionError: completionError?.call(task.id),
+                  completionErrorCode: completionErrorCode?.call(task.id),
                 ),
             ],
           ),

@@ -25,6 +25,14 @@ class TaskStore(ABC):
         """Return a task snapshot, or None if the ID does not exist."""
 
     @abstractmethod
+    def save_and_delete(self, task: Task, task_id: UUID) -> None:
+        """Save one snapshot and delete another in one transaction."""
+
+    @abstractmethod
+    def has_dependency_links(self, task_id: UUID) -> bool:
+        """Report whether a task is linked as dependent or prerequisite."""
+
+    @abstractmethod
     def delete(self, task_id: UUID) -> None:
         """Permanently remove a task and its dependency links; missing IDs raise KeyError."""
 

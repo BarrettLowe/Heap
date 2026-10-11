@@ -64,6 +64,31 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets(
+    'recurrence undo refusal stays attached to the completed row without retry copy',
+    (tester) async {
+      const message =
+          'Can\'t undo completion because the next occurrence was changed or linked to another task. The completed task is unchanged. Refresh to see the current tasks.';
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TaskRow(
+              task: detail(status: 'completed', priority: 2, duration: 30),
+              onHeap: true,
+              onOpen: () {},
+              onComplete: () {},
+              completionError: message,
+              completionErrorCode: 'recurrence_undo_conflict',
+            ),
+          ),
+        ),
+      );
+      expect(find.text(message), findsOneWidget);
+      expect(find.textContaining('Retry.'), findsNothing);
+      expect(find.byKey(Key('completion-$taskId')), findsOneWidget);
+    },
+  );
+
   testWidgets('completed priority fill is grey, preserving its full label', (
     tester,
   ) async {
