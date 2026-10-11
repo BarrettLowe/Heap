@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Heap theme directions — preview</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: system-ui, sans-serif;
+      background: #f4f4f4;
+      color: #202020;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; }
+    .page-header { max-width: 1500px; margin: 0 auto 24px; }
+    h1 { margin: 0 0 8px; font-size: clamp(1.6rem, 3vw, 2.2rem); }
+    .intro { max-width: 72ch; margin: 0; line-height: 1.5; }
+    .artifact-controls { margin-top: 20px; padding: 16px; background: white; border: 1px solid #777; border-radius: 8px; }
+    .artifact-controls p { margin: 0 0 10px; }
+    .view-switcher { display: flex; flex-wrap: wrap; gap: 8px; }
+    .view-button {
+      min-width: 88px; min-height: 48px; padding: 10px 16px; border: 1px solid #555;
+      border-radius: 6px; background: white; color: #202020; font: inherit; font-weight: 650; cursor: pointer;
+    }
+    .view-button[aria-pressed="true"] { color: white; background: #242424; border-color: #242424; }
+    :focus-visible { outline: 2px solid #174DF0; outline-offset: 2px; }
+    .directions { max-width: 1500px; margin: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: start; }
+    .direction { min-width: 0; }
+    .direction-copy { min-height: 128px; margin-bottom: 12px; }
+    .direction-copy h2 { margin: 0 0 6px; font-size: 1.3rem; }
+    .direction-copy p { margin: 0 0 6px; line-height: 1.45; }
+    .direction-copy .tradeoff { color: #4b4b4b; font-size: .94rem; }
+    .specimen {
+      --primary: #1B5EC4; --on-primary: #FFFFFF; --canvas: #FAF7F0; --surface: #FFFCF5;
+      --text: #282723; --muted: #666158; --selection: #E4EDFC; --border: #82766A;
+      --divider: #D8D1C5; --focus: #1B5EC4; --error: #B42318; --on-error: #FFFFFF;
+      --error-surface: #FEECE8; --completion-neutral: #EBE7DF; --completion-text: #49463F;
+      --body-font: system-ui, sans-serif; --heading-font: Georgia, 'Times New Roman', serif;
+      --label-font: system-ui, sans-serif; --heading-weight: 700; --label-weight: 600;
+      --line-height: 1.55; --button-radius: 24px; --field-radius: 12px; --sheet-radius: 24px;
+      --pill-radius: 14px; --content-inset: 20px; --section-gap: 24px; --field-gap: 16px;
+      --control-border: 1px; --rule-width: 1px; --fab-radius: 50%;
+      position: relative; display: flex; flex-direction: column; width: 100%; max-width: 390px; min-height: 720px; margin: 0 auto;
+      overflow: visible; background: var(--canvas); color: var(--text); border: 1px solid #aaa;
+      font-family: var(--body-font); line-height: var(--line-height);
+    }
+    .specimen[data-theme="blueprint"] {
+      --primary: #0B5670; --on-primary: #FFFFFF; --canvas: #F0F5FA; --surface: #FFFFFF;
+      --text: #172B3A; --muted: #506171; --selection: #D7E9F5; --border: #718396;
+      --divider: #CDD7E1; --focus: #0B5670; --error: #B42318; --on-error: #FFFFFF;
+      --error-surface: #FEECE8; --completion-neutral: #E6EBEF; --completion-text: #44515C;
+      --body-font: system-ui, sans-serif; --heading-font: system-ui, sans-serif;
+      --label-font: ui-monospace, 'DejaVu Sans Mono', 'Courier New', monospace;
+      --heading-weight: 700; --label-weight: 600; --line-height: 1.45;
+      --button-radius: 6px; --field-radius: 4px; --sheet-radius: 12px; --pill-radius: 6px;
+      --content-inset: 16px; --section-gap: 16px; --field-gap: 12px; --control-border: 1px;
+      --rule-width: 1px; --fab-radius: 12px;
+    }
+    .specimen[data-theme="graphite"] {
+      --primary: #242424; --on-primary: #FFFFFF; --canvas: #F7F7F7; --surface: #FFFFFF;
+      --text: #202020; --muted: #606060; --selection: #E5E5E5; --border: #777777;
+      --divider: #D6D6D6; --focus: #174DF0; --error: #B42318; --on-error: #FFFFFF;
+      --error-surface: #FEECE8; --completion-neutral: #EBEBEB; --completion-text: #494949;
+      --body-font: Arial, Helvetica, sans-serif; --heading-font: Arial, Helvetica, sans-serif;
+      --label-font: Arial, Helvetica, sans-serif; --heading-weight: 800; --label-weight: 700;
+      --line-height: 1.45; --button-radius: 2px; --field-radius: 2px; --sheet-radius: 8px;
+      --pill-radius: 2px; --content-inset: 20px; --section-gap: 24px; --field-gap: 16px;
+      --control-border: 2px; --rule-width: 2px; --fab-radius: 4px;
+    }
+    .app-header { height: 64px; padding: 12px var(--content-inset); display: flex; align-items: center; gap: 12px; }
+    .app-logo { display: block; width: 40px; height: 32px; object-fit: contain; }
+    .wordmark { font: 800 32px/1 var(--body-font); letter-spacing: -.04em; }
+    .refresh { margin-left: auto; width: 48px; height: 48px; display: grid; place-items: center; border-radius: var(--button-radius); color: var(--text); font-size: 25px; }
+    .screen { padding: 10px var(--content-inset) 24px; }
+    .screen h3 { font: var(--heading-weight) 30px/1.2 var(--heading-font); margin: 10px 0 4px; overflow-wrap: anywhere; }
+    .screen-description { margin: 0 0 12px; font-size: 16px; }
+    .heap-extra { margin: 0 0 var(--section-gap); color: var(--muted); font-size: 15px; }
+    .segmented { display: flex; width: 100%; min-height: 48px; padding: 3px; margin: 18px 0 26px; border: var(--control-border) solid var(--border); border-radius: var(--button-radius); gap: 4px; }
+    .segment { flex: 1; min-width: 0; min-height: 40px; display: grid; place-items: center; border-radius: var(--button-radius); font-weight: 650; }
+    .segment.selected { color: var(--on-primary); background: var(--primary); }
+    .empty-title { margin: 0 0 3px; font-size: 16px; font-weight: 650; }
+    .empty-copy { margin: 0; font-size: 15px; color: var(--muted); }
+    .heap-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: -8px 0 24px; }
+    .filter { min-height: 48px; padding: 9px 14px; display: inline-flex; align-items: center; gap: 7px; border: var(--control-border) solid var(--border); border-radius: var(--button-radius); background: var(--surface); color: var(--text); font: var(--label-weight) 14px/1.3 var(--label-font); }
+    .filter.selected { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+    .filter.selected::after { content: "⌄"; }
+    .outline-action { margin-top: 18px; min-height: 48px; padding: 10px 16px; display: inline-flex; align-items: center; justify-content: center; border: var(--control-border) solid var(--focus); border-radius: var(--button-radius); color: var(--focus); background: transparent; font-weight: 650; }
+    .bottom-nav { position: relative; flex-shrink: 0; margin-top: auto; padding: 8px 10px 12px; min-height: 82px; display: flex; align-items: center; justify-content: space-around; border-top: var(--rule-width) solid var(--divider); background: var(--canvas); }
+    .nav-item { min-width: 54px; min-height: 48px; padding: 4px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: var(--button-radius); color: var(--text); font-size: 12px; line-height: 1.2; text-align: center; }
+    .nav-item.selected { min-width: 64px; color: var(--text); background: var(--selection); outline: var(--control-border) solid var(--border); }
+    .nav-item.soon { color: var(--muted); }
+    .nav-icon { font-size: 18px; line-height: 1.2; }
+    .capture-fab { width: 64px; height: 64px; display: grid; place-items: center; margin-top: -18px; border-radius: var(--fab-radius); background: var(--primary); color: var(--on-primary); font-size: 28px; line-height: 1; }
+    .capture-label { color: var(--text); font-size: 12px; }
+    .sheet-backdrop { position: absolute; z-index: 2; inset: 0; display: flex; align-items: flex-end; background: rgb(0 0 0 / 38%); }
+    .capture-sheet { width: 100%; max-height: min(88vh, 640px); overflow: auto; overscroll-behavior: contain; padding: 18px var(--content-inset) 24px; border-radius: var(--sheet-radius) var(--sheet-radius) 0 0; background: var(--surface); color: var(--text); box-shadow: 0 -2px 12px rgb(0 0 0 / 10%); }
+    .sheet-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+    .sheet-heading h4 { margin: 0; font: var(--heading-weight) 24px/1.2 var(--heading-font); }
+    .close-mark { width: 48px; height: 48px; display: grid; place-items: center; border-radius: var(--button-radius); font-size: 26px; }
+    .field-label, .group-label { display: block; margin-bottom: 6px; font: var(--label-weight) 14px/1.4 var(--label-font); }
+    .field { width: 100%; min-height: 48px; padding: 11px 12px; border: var(--control-border) solid var(--border); border-radius: var(--field-radius); background: var(--surface); color: var(--text); font: 16px/1.4 var(--body-font); }
+    .field::placeholder { color: var(--muted); opacity: 1; }
+    .sheet-note { margin: 10px 0 18px; font-size: 14px; color: var(--muted); }
+    .filled-action { min-height: 48px; padding: 10px 18px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: var(--control-border) solid var(--primary); border-radius: var(--button-radius); background: var(--primary); color: var(--on-primary); font: 650 16px/1.3 var(--body-font); }
+    .preview-note { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+    .controls-view { padding-bottom: 28px; }
+    .controls-view > h3 { margin-bottom: 18px; }
+    .control-group { margin-bottom: var(--section-gap); }
+    .specimen-caption { margin: 0 0 8px; color: var(--muted); font: var(--label-weight) 12px/1.4 var(--label-font); letter-spacing: .03em; text-transform: uppercase; }
+    .choice-row { display: flex; flex-wrap: wrap; gap: 4px; }
+    .choice { min-height: 48px; padding: 8px 11px; display: inline-flex; align-items: center; gap: 6px; border: var(--control-border) solid var(--border); border-radius: var(--button-radius); background: var(--surface); color: var(--text); font: var(--label-weight) 14px/1.3 var(--label-font); }
+    .choice.chosen { border-color: var(--focus); box-shadow: inset 0 0 0 1px var(--focus); }
+    .choice-check { color: var(--focus); font-weight: 800; }
+    .priority-row { display: flex; flex-wrap: wrap; gap: 8px; }
+    .priority { min-height: 28px; max-width: 100%; padding: 3px 10px; display: inline-flex; align-items: center; border-radius: var(--pill-radius); font-size: 13px; line-height: 1.35; font-weight: 650; white-space: nowrap; }
+    .p1 { background: #FFC4B8; color: #7F2418; }
+    .p2 { background: #FFD790; color: #644000; }
+    .p3 { background: #CAE0FA; color: #244E7A; }
+    .p4 { background: #EEE5F3; color: #624270; }
+    .p5, .unset-pill { background: #F1F1F1; color: #414141; }
+    .field-specimens { display: grid; gap: var(--field-gap); }
+    .field-wrap { min-width: 0; }
+    .field-wrap .field { display: flex; align-items: center; overflow-wrap: anywhere; }
+    .readonly { user-select: none; }
+    .focus-demo { outline: 2px solid var(--focus); outline-offset: 2px; }
+    .error-demo { border-color: var(--error); }
+    .error-copy { margin: 5px 0 0; color: var(--error); font-size: 14px; }
+    .completion-examples { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .completion-item { display: flex; align-items: center; gap: 6px; min-height: 48px; }
+    .completion-circle { width: 28px; height: 28px; border: 2px solid var(--border); border-radius: 50%; display: grid; place-items: center; color: white; background: transparent; }
+    .completion-circle.done { background: var(--primary); border-color: var(--primary); font-size: 18px; font-weight: 800; }
+    .completion-circle.done + .priority { background: var(--completion-neutral); color: var(--completion-text); }
+    .artifact-boundary { max-width: 1500px; margin: 18px auto 0; color: #444; font-size: 14px; line-height: 1.5; }
+    [hidden] { display: none !important; }
+    @media (max-width: 1050px) { .directions { grid-template-columns: repeat(2, minmax(0, 1fr)); } .direction:last-child { grid-column: 1 / -1; } .direction:last-child .specimen { margin-left: 0; } }
+    @media (max-width: 700px) {
+      body { padding: 16px; }
+      .directions { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+      .direction:last-child { grid-column: auto; }
+      .direction-copy { min-height: 0; }
+      .direction:last-child .specimen { margin: 0 auto; }
+      .specimen { min-height: 720px; }
+    }
+    @media (max-width: 360px) {
+      body { padding: 12px; }
+      .nav-item { min-width: 45px; padding-inline: 4px; font-size: 11px; }
+      .nav-item.selected { min-width: 52px; }
+      .bottom-nav { padding-inline: 4px; }
+    }
+    @media (max-width: 310px) {
+      .app-header { height: auto; min-height: 64px; padding-inline: 0; flex-wrap: wrap; }
+      .bottom-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 2px; min-height: 124px; }
+      .nav-item { min-width: 0; width: 100%; }
+      .nav-item:nth-child(2) { order: 3; }
+      .nav-item:nth-child(3) { order: 2; }
+      .capture-fab { width: 64px; height: 64px; margin-top: 0; }
+    }
+  </style>
+</head>
+<body>
+  <header class="page-header">
+    <h1>Heap theme directions</h1>
+    <p class="intro">Three preview-only visual directions using the same empty screens and control states. Barrett selected Paper desk. The other directions remain here for comparison. The app-like controls below are visual specimens only; use the artifact controls to compare views across all 3 themes.</p>
+    <section class="artifact-controls" aria-label="Artifact controls">
+      <p><strong>Preview view</strong> <span>— switches the same content in all 3 specimens:</span></p>
+      <div class="view-switcher" role="group" aria-label="Choose preview view">
+        <button class="view-button" type="button" data-view="inbox" aria-pressed="true">Inbox</button>
+        <button class="view-button" type="button" data-view="heap" aria-pressed="false">Heap</button>
+        <button class="view-button" type="button" data-view="capture" aria-pressed="false">Capture</button>
+        <button class="view-button" type="button" data-view="controls" aria-pressed="false">Controls</button>
+      </div>
+    </section>
+  </header>
+
+  <main class="directions">
+    <article class="direction">
+      <div class="direction-copy">
+        <h2>Paper desk</h2>
+        <p>Warm editorial stationery with cream canvas, serif headings, and cobalt actions.</p>
+        <p class="tradeoff"><strong>Tradeoff:</strong> More relaxed and less compact; serif headings depart from the current all-sans UI.</p>
+      </div>
+      <div class="specimen" data-theme="paper" data-name="Paper desk">
+        <div class="app-header"><img class="app-logo" src="../header-mark.png" alt=""><span class="wordmark">Heap</span><span class="refresh" aria-label="Refresh inbox">↻</span></div>
+        <section class="screen" data-panel="inbox">
+          <h3>Inbox</h3><p class="screen-description">Capture now. Organize later.</p>
+          <div class="segmented"><span class="segment selected">Inbox</span><span class="segment">Heap</span></div>
+          <p class="empty-title">Your inbox is empty.</p><p class="empty-copy">Tap + to capture a task.</p>
+        </section>
+        <section class="screen" data-panel="heap" hidden>
+          <h3>Heap</h3><p class="screen-description">On the heap, not necessarily unblocked or started.</p>
+          <p class="heap-extra">Ordered by priority, due date, and time on the Heap.</p>
+          <div class="segmented"><span class="segment">Inbox</span><span class="segment selected">Heap</span></div>
+          <div class="heap-filters"><span class="filter">◷ &nbsp;Time</span><span class="filter">⚑ &nbsp;Priority</span></div>
+          <p class="empty-title">Nothing on the heap yet.</p><p class="empty-copy">Give an inbox task a priority and duration, then save.</p>
+          <span class="outline-action">Go to inbox</span>
+        </section>
+        <section class="screen controls-view" data-panel="controls" hidden>
+          <h3>Controls</h3>
+          <div class="control-group"><p class="specimen-caption">Selected filter</p><div class="heap-filters"><span class="filter selected">⚑ &nbsp;Priority: P3</span><span class="filter">◷ &nbsp;Time</span></div></div>
+          <div class="control-group"><p class="specimen-caption">Priority pills</p><div class="priority-row"><span class="priority p1">P1 Critical</span><span class="priority p2">P2 Important</span><span class="priority p3">P3 Normal</span><span class="priority p4">P4 Someday</span><span class="priority p5">P5 Maybe</span><span class="priority unset-pill">Unset</span></div></div>
+          <div class="control-group"><p class="specimen-caption">Editor fields</p>
+            <span class="group-label">Priority</span><div class="choice-row"><span class="choice chosen"><span class="choice-check">✓</span>Unset</span><span class="choice">P1 Critical</span><span class="choice">P2 Important</span><span class="choice">P3 Normal</span><span class="choice">P4 Someday</span><span class="choice">P5 Maybe</span></div>
+            <span class="group-label" style="margin-top:12px">Duration</span><div class="choice-row"><span class="choice chosen"><span class="choice-check">✓</span>Unknown</span><span class="choice">5 min</span><span class="choice">15 min</span><span class="choice">30 min</span><span class="choice">1 hour</span><span class="choice">2 hours</span><span class="choice">4 hours</span></div>
+          </div>
+          <div class="control-group"><p class="specimen-caption">Editor fields</p><div class="field-specimens">
+            <div class="field-wrap"><span class="field-label">Task title</span><div class="field readonly" aria-label="Task title, blank">&nbsp;</div></div>
+            <div class="field-wrap"><span class="field-label">Project</span><div class="field readonly" aria-label="Project: No project">No project</div></div>
+            <div class="field-wrap"><span class="field-label">Due date</span><div class="field readonly" aria-label="Due date: None">None</div></div>
+          </div></div>
+          <div class="control-group"><p class="specimen-caption">Focus</p><span class="field-label">Task title</span><div class="field readonly focus-demo" tabindex="0" aria-label="Focused blank task title specimen">&nbsp;</div></div>
+          <div class="control-group"><p class="specimen-caption">Completion</p><div class="completion-examples"><div class="completion-item"><span class="completion-circle" aria-label="Unchecked completion specimen"></span><span class="priority p3">P3 Normal</span></div><div class="completion-item"><span class="completion-circle done" aria-label="Completed specimen">✓</span><span class="priority p3">P3 Normal</span></div></div></div>
+          <div class="control-group"><p class="specimen-caption">Error</p><span class="field-label">Task title</span><div class="field readonly error-demo" aria-label="Blank task title with error">&nbsp;</div><p class="error-copy">Enter a task title.</p></div>
+          <div class="control-group"><p class="specimen-caption">Non-operational action specimens</p><span class="filled-action">＋ Add task</span> <span class="outline-action">Go to inbox</span><p class="preview-note">Preview only — no task is created.</p></div>
+        </section>
+        <nav class="bottom-nav" aria-label="Preview toolbar">
+          <span class="nav-item selected"><span class="nav-icon">▤</span>Tasks</span>
+          <span class="nav-item soon"><span class="nav-icon">◷</span>Today<small>Soon</small></span>
+          <span class="nav-item"><span class="capture-fab">+</span><span class="capture-label">Capture</span></span>
+          <span class="nav-item"><span class="nav-icon">▦</span>Projects</span>
+          <span class="nav-item soon"><span class="nav-icon">⚙</span>Settings<small>Soon</small></span>
+        </nav>
+        <div class="sheet-backdrop" data-panel="capture" hidden>
+          <section class="capture-sheet" aria-label="Capture task preview">
+            <div class="sheet-heading"><h4>Capture task</h4><span class="close-mark" aria-label="Close capture">×</span></div>
+            <label class="field-label">Task title</label><div class="field" aria-label="Task title, blank"><span style="color:var(--muted)">What needs doing?</span></div>
+            <p class="sheet-note">Unsaved capture text stays here until you add it or clear it.</p>
+            <span class="filled-action">＋ Add task</span>
+            <p class="preview-note">Preview only — no task is created.</p>
+          </section>
+        </div>
+      </div>
+    </article>
+
+    <article class="direction">
+      <div class="direction-copy">
+        <h2>Blueprint</h2>
+        <p>Cool, structured utility with pale blue-gray canvas, compact spacing, and precise alignment.</p>
+        <p class="tradeoff"><strong>Tradeoff:</strong> Orderly but less cozy; monospace labels occupy more width and must wrap rather than shrink.</p>
+      </div>
+      <div class="specimen" data-theme="blueprint" data-name="Blueprint">
+        <div class="app-header"><img class="app-logo" src="../header-mark.png" alt=""><span class="wordmark">Heap</span><span class="refresh" aria-label="Refresh inbox">↻</span></div>
+        <section class="screen" data-panel="inbox"><h3>Inbox</h3><p class="screen-description">Capture now. Organize later.</p><div class="segmented"><span class="segment selected">Inbox</span><span class="segment">Heap</span></div><p class="empty-title">Your inbox is empty.</p><p class="empty-copy">Tap + to capture a task.</p></section>
+        <section class="screen" data-panel="heap" hidden><h3>Heap</h3><p class="screen-description">On the heap, not necessarily unblocked or started.</p><p class="heap-extra">Ordered by priority, due date, and time on the Heap.</p><div class="segmented"><span class="segment">Inbox</span><span class="segment selected">Heap</span></div><div class="heap-filters"><span class="filter">◷ &nbsp;Time</span><span class="filter">⚑ &nbsp;Priority</span></div><p class="empty-title">Nothing on the heap yet.</p><p class="empty-copy">Give an inbox task a priority and duration, then save.</p><span class="outline-action">Go to inbox</span></section>
+        <section class="screen controls-view" data-panel="controls" hidden>
+          <h3>Controls</h3><div class="control-group"><p class="specimen-caption">Selected filter</p><div class="heap-filters"><span class="filter selected">⚑ &nbsp;Priority: P3</span><span class="filter">◷ &nbsp;Time</span></div></div>
+          <div class="control-group"><p class="specimen-caption">Priority pills</p><div class="priority-row"><span class="priority p1">P1 Critical</span><span class="priority p2">P2 Important</span><span class="priority p3">P3 Normal</span><span class="priority p4">P4 Someday</span><span class="priority p5">P5 Maybe</span><span class="priority unset-pill">Unset</span></div></div>
+          <div class="control-group"><p class="specimen-caption">Editor fields</p><span class="group-label">Priority</span><div class="choice-row"><span class="choice chosen"><span class="choice-check">✓</span>Unset</span><span class="choice">P1 Critical</span><span class="choice">P2 Important</span><span class="choice">P3 Normal</span><span class="choice">P4 Someday</span><span class="choice">P5 Maybe</span></div><span class="group-label" style="margin-top:12px">Duration</span><div class="choice-row"><span class="choice chosen"><span class="choice-check">✓</span>Unknown</span><span class="choice">5 min</span><span class="choice">15 min</span><span class="choice">30 min</span><span class="choice">1 hour</span><span class="choice">2 hours</span><span class="choice">4 hours</span></div></div>
+          <div class="control-group"><p class="specimen-caption">Editor fields</p><div class="field-specimens"><div class="field-wrap"><span class="field-label">Task title</span><div class="field readonly" aria-label="Task title, blank">&nbsp;</div></div><div class="field-wrap"><span class="field-label">Project</span><div class="field readonly" aria-label="Project: No project">No project</div></div><div class="field-wrap"><span class="field-label">Due date</span><div class="field readonly" aria-label="Due date: None">None</div></div></div></div>
+          <div class="control-group"><p class="specimen-caption">Focus</p><span class="field-label">Task title</span><div class="field readonly focus-demo" tabindex="0" aria-label="Focused blank task title specimen">&nbsp;</div></div>
+          <div class="control-group"><p class="specimen-caption">Completion</p><div class="completion-examples"><div class="completion-item"><span class="completion-circle" aria-label="Unchecked completion specimen"></span><span class="priority p3">P3 Normal</span></div><div class="completion-item"><span class="completion-circle done" aria-label="Completed specimen">✓</span><span class="priority p3">P3 Normal</span></div></div></div>
+          <div class="control-group"><p class="specimen-caption">Error</p><span class="field-label">Task title</span><div class="field readonly error-demo" aria-label="Blank task title with error">&nbsp;</div><p class="error-copy">Enter a task title.</p></div>
+          <div class="control-group"><p class="specimen-caption">Non-operational action specimens</p><span class="filled-action">＋ Add task</span> <span class="outline-action">Go to inbox</span><p class="preview-note">Preview only — no task is created.</p></div>
+        </section>
+        <nav class="bottom-nav" aria-label="Preview toolbar"><span class="nav-item selected"><span class="nav-icon">▤</span>Tasks</span><span class="nav-item soon"><span class="nav-icon">◷</span>Today<small>Soon</small></span><span class="nav-item"><span class="capture-fab">+</span><span class="capture-label">Capture</span></span><span class="nav-item"><span class="nav-icon">▦</span>Projects</span><span class="nav-item soon"><span class="nav-icon">⚙</span>Settings<small>Soon</small></span></nav>
+        <div class="sheet-backdrop" data-panel="capture" hidden><section class="capture-sheet" aria-label="Capture task preview"><div class="sheet-heading"><h4>Capture task</h4><span class="close-mark" aria-label="Close capture">×</span></div><label class="field-label">Task title</label><div class="field" aria-label="Task title, blank"><span style="color:var(--muted)">What needs doing?</span></div><p class="sheet-note">Unsaved capture text stays here until you add it or clear it.</p><span class="filled-action">＋ Add task</span><p class="preview-note">Preview only — no task is created.</p></section></div>
+      </div>
+    </article>
+
+    <article class="direction">
+      <div class="direction-copy">
+        <h2>Graphite</h2>
+        <p>Expressive monochrome with black primary actions, flat squared controls, and strong rules.</p>
+        <p class="tradeoff"><strong>Tradeoff:</strong> Strongest contrast and visual weight; less gentle than the other directions.</p>
+      </div>
+      <div class="specimen" data-theme="graphite" data-name="Graphite">
+        <div class="app-header"><img class="app-logo" src="../header-mark.png" alt=""><span class="wordmark">Heap</span><span class="refresh" aria-label="Refresh inbox">↻</span></div>
+        <section class="screen" data-panel="inbox"><h3>Inbox</h3><p class="screen-description">Capture now. Organize later.</p><div class="segmented"><span class="segment selected">Inbox</span><span class="segment">Heap</span></div><p class="empty-title">Your inbox is empty.</p><p class="empty-copy">Tap + to capture a task.</p></section>
+        <section class="screen" data-panel="heap" hidden><h3>Heap</h3><p class="screen-description">On the heap, not necessarily unblocked or started.</p><p class="heap-extra">Ordered by priority, due date, and time on the Heap.</p><div class="segmented"><span class="segment">Inbox</span><span class="segment selected">Heap</span></div><div class="heap-filters"><span class="filter">◷ &nbsp;Time</span><span class="filter">⚑ &nbsp;Priority</span></div><p class="empty-title">Nothing on the heap yet.</p><p class="empty-copy">Give an inbox task a priority and duration, then save.</p><span class="outline-action">Go to inbox</span></section>
+        <section class="screen controls-view" data-panel="controls" hidden>
+          <h3>Controls</h3><div class="control-group"><p class="specimen-caption">Selected filter</p><div class="heap-filters"><span class="filter selected">⚑ &nbsp;Priority: P3</span><span class="filter">◷ &nbsp;Time</span></div></div>
+          <div class="control-group"><p class="specimen-caption">Priority pills</p><div class="priority-row"><span class="priority p1">P1 Critical</span><span class="priority p2">P2 Important</span><span class="priority p3">P3 Normal</span><span class="priority p4">P4 Someday</span><span class="priority p5">P5 Maybe</span><span class="priority unset-pill">Unset</span></div></div>
+          <div class="control-group"><p class="specimen-caption">Editor fields</p><span class="group-label">Priority</span><div class="choice-row"><span class="choice chosen"><span class="choice-check">✓</span>Unset</span><span class="choice">P1 Critical</span><span class="choice">P2 Important</span><span class="choice">P3 Normal</span><span class="choice">P4 Someday</span><span class="choice">P5 Maybe</span></div><span class="group-label" style="margin-top:12px">Duration</span><div class="choice-row"><span class="choice chosen"><span class="choice-check">✓</span>Unknown</span><span class="choice">5 min</span><span class="choice">15 min</span><span class="choice">30 min</span><span class="choice">1 hour</span><span class="choice">2 hours</span><span class="choice">4 hours</span></div></div>
+          <div class="control-group"><p class="specimen-caption">Editor fields</p><div class="field-specimens"><div class="field-wrap"><span class="field-label">Task title</span><div class="field readonly" aria-label="Task title, blank">&nbsp;</div></div><div class="field-wrap"><span class="field-label">Project</span><div class="field readonly" aria-label="Project: No project">No project</div></div><div class="field-wrap"><span class="field-label">Due date</span><div class="field readonly" aria-label="Due date: None">None</div></div></div></div>
+          <div class="control-group"><p class="specimen-caption">Focus</p><span class="field-label">Task title</span><div class="field readonly focus-demo" tabindex="0" aria-label="Focused blank task title specimen">&nbsp;</div></div>
+          <div class="control-group"><p class="specimen-caption">Completion</p><div class="completion-examples"><div class="completion-item"><span class="completion-circle" aria-label="Unchecked completion specimen"></span><span class="priority p3">P3 Normal</span></div><div class="completion-item"><span class="completion-circle done" aria-label="Completed specimen">✓</span><span class="priority p3">P3 Normal</span></div></div></div>
+          <div class="control-group"><p class="specimen-caption">Error</p><span class="field-label">Task title</span><div class="field readonly error-demo" aria-label="Blank task title with error">&nbsp;</div><p class="error-copy">Enter a task title.</p></div>
+          <div class="control-group"><p class="specimen-caption">Non-operational action specimens</p><span class="filled-action">＋ Add task</span> <span class="outline-action">Go to inbox</span><p class="preview-note">Preview only — no task is created.</p></div>
+        </section>
+        <nav class="bottom-nav" aria-label="Preview toolbar"><span class="nav-item selected"><span class="nav-icon">▤</span>Tasks</span><span class="nav-item soon"><span class="nav-icon">◷</span>Today<small>Soon</small></span><span class="nav-item"><span class="capture-fab">+</span><span class="capture-label">Capture</span></span><span class="nav-item"><span class="nav-icon">▦</span>Projects</span><span class="nav-item soon"><span class="nav-icon">⚙</span>Settings<small>Soon</small></span></nav>
+        <div class="sheet-backdrop" data-panel="capture" hidden><section class="capture-sheet" aria-label="Capture task preview"><div class="sheet-heading"><h4>Capture task</h4><span class="close-mark" aria-label="Close capture">×</span></div><label class="field-label">Task title</label><div class="field" aria-label="Task title, blank"><span style="color:var(--muted)">What needs doing?</span></div><p class="sheet-note">Unsaved capture text stays here until you add it or clear it.</p><span class="filled-action">＋ Add task</span><p class="preview-note">Preview only — no task is created.</p></section></div>
+      </div>
+    </article>
+  </main>
+  <p class="artifact-boundary">All controls inside the app specimens are non-operational examples. The toolbar, filters, selector, editor fields, refresh, and actions do not navigate, save, or contact a backend. Only the preview-view buttons above switch what is shown.</p>
+  <script>
+    const viewButtons = document.querySelectorAll('.view-button');
+    const specimens = document.querySelectorAll('.specimen');
+
+    for (const specimen of specimens) {
+      const titleLabel = specimen.querySelector('.capture-sheet .field-label');
+      const titleField = specimen.querySelector('.capture-sheet .field');
+      titleLabel.id = `${specimen.dataset.theme}-capture-title-label`;
+      titleField.id = `${specimen.dataset.theme}-capture-title`;
+      titleField.setAttribute('role', 'textbox');
+      titleField.setAttribute('aria-readonly', 'true');
+      titleField.setAttribute('aria-labelledby', titleLabel.id);
+      const closeIcon = specimen.querySelector('.close-mark');
+      closeIcon.setAttribute('role', 'img');
+      closeIcon.setAttribute('aria-label', 'Close capture icon specimen');
+    }
+
+    function showView(view) {
+      for (const button of viewButtons) {
+        button.setAttribute('aria-pressed', String(button.dataset.view === view));
+      }
+      for (const specimen of specimens) {
+        for (const panel of specimen.querySelectorAll('[data-panel]')) {
+          panel.hidden = panel.dataset.panel !== view && !(view === 'capture' && panel.dataset.panel === 'inbox');
+        }
+        const refresh = specimen.querySelector('.refresh');
+        refresh.setAttribute('aria-label', view === 'heap' ? 'Refresh the heap' : 'Refresh inbox');
+      }
+    }
+
+    for (const button of viewButtons) {
+      button.addEventListener('click', () => showView(button.dataset.view));
+    }
+  </script>
+</body>
+</html>

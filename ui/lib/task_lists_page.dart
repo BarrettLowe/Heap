@@ -210,7 +210,7 @@ class _TaskListsPageState extends State<TaskListsPage>
       useSafeArea: true,
       isDismissible: false,
       enableDrag: false,
-      backgroundColor: heapCanvas,
+      backgroundColor: heapSurface,
       builder: (_) => CaptureSheet(
         controller: widget.inbox,
         title: _captureText,

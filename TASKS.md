@@ -476,3 +476,47 @@ pass, including duration-label formatting.
 
 Verified with 216 passing Flutter tests, clean analysis, and successful web build.
 No emulator or phone was connected for visual/device verification.
+
+## 30. Teetering pile launcher icon (partial work for issue #9)
+
+Barrett selected 01 / Teetering pile from Sol-6.1's proposals in
+`docs/icon-options/comparison.png`. Luna owns the Android/web integration.
+
+- [x] Create and visually check 3 elevation-view options; obtain Barrett's choice.
+- [x] Replace Android adaptive/legacy and web/PWA/favicon artwork without changing app behavior.
+- [x] Verify reproducible exports, native PNG dimensions, transparency and web mask safety; warn about Android's generic safe-circle limit.
+- [x] Verify Flutter analysis, all 216 tests, debug/release APK builds and the web build.
+- [x] Install the release APK and visually check the circle launcher icon on the API 37 emulator.
+- [x] Install the release APK, verify home-screen and predicted-dock icons on Barrett's Pixel 6 Pro, and open Heap from its icon.
+
+Editable source: `docs/icon-options/01-teetering-pile.svg`. Export command:
+`python3 ui/tool/export_icons.py`. Barrett chose to retain the current Android
+size for his Pixel 6 Pro rather than shrink it to accommodate all launcher masks.
+The generic safe-circle check is a warning. The physical Pixel 6 Pro icons looked
+centered and unclipped at this size.
+
+## 31. In-app mark and palette (issue #9, corrected scope)
+
+The launcher work did not complete issue #9: Barrett meant the forest-green
+mountain inside the app. Keep the approved launcher change, replace the in-app
+mark with the teetering pile, then agree a palette before recoloring the UI.
+
+- [x] Have Sol-6.1 specify the transparent header mark and 2 accessible palette options.
+- [x] Replace the in-app mountain with the approved untinted artwork; preserve layout and semantics.
+- [x] Verify all 218 widget tests, analysis and release APK/web builds.
+- [x] Complete independent Luna code review and Sol-6.1 emulator header review; neither found blockers.
+- [x] Verify the in-app header on the emulator at normal and 320/2x text, and in narrow/wide Firefox web views.
+- [x] Install the release build and verify the actual in-app header on the unlocked Pixel 6 Pro.
+- [x] Have Sol-6.1 design 3 distinct theme directions and Luna present them in `docs/heap-brand-refresh/themes/index.html`.
+- [x] Verify local HTML view switching, keyboard operation and all views at 320px / 200% Firefox zoom; no horizontal overflow or toolbar overlap.
+- [x] Have Barrett choose a theme before changing the app palette: Paper desk.
+- [x] Apply Paper desk colors, typography, shapes and component states without changing task behavior or stored project colors.
+- [x] Verify all 223 tests, Flutter analysis, debug/release APK builds and the web build.
+- [x] Complete final independent Luna code review and Sol-6.1 visual review; neither found blockers.
+- [x] Verify emulator and narrow/wide web rendering, including 320/2x Android text and 320px/200% Firefox zoom, completion/undo, filters, capture, project editing and saved green project data.
+- [x] Install and open the release build on Barrett's Pixel 6 Pro; verify the Paper desk Inbox with live server data.
+
+Barrett selected Paper desk from the 3-direction HTML preview. Implementation
+uses its warm cream, charcoal, cobalt and serif headings; the wordmark stays sans.
+The applied theme is verified on emulator, web and Pixel 6 Pro. Barrett approved
+the Pixel build and requested a pull request for issue #9.
