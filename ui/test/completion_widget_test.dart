@@ -100,7 +100,7 @@ void main() {
     final fill = tester.widget<AnimatedContainer>(
       find.byType(AnimatedContainer),
     );
-    expect((fill.decoration as BoxDecoration).color, const Color(0xFFE5E8E5));
+    expect((fill.decoration as BoxDecoration).color, heapCompletionNeutral);
     expect(find.text('P2 Important'), findsOneWidget);
   });
 

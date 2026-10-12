@@ -166,11 +166,7 @@ class _IconBrowserState extends State<_IconBrowser> {
                   builder: (context, constraints) {
                     const title = Text(
                       'Choose icon',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: heapTitle,
-                      ),
+                      style: heapSheetHeadingStyle,
                     );
                     final largeText =
                         MediaQuery.textScalerOf(context).scale(1) >= 1.5;
@@ -245,8 +241,10 @@ class _IconBrowserState extends State<_IconBrowser> {
                                 ? null
                                 : 'Search icons by name',
                             filled: true,
-                            fillColor: Colors.white,
-                            border: const OutlineInputBorder(),
+                            fillColor: heapSurface,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                             suffixIcon: _search.text.isEmpty
                                 ? null
                                 : IconButton(
@@ -359,16 +357,16 @@ class _IconTileState extends State<_IconTile> {
     child: Material(
       color: widget.selected || _focused ? heapHighlight : Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(24),
         side: _focused
-            ? const BorderSide(color: heapGreen, width: 2)
+            ? const BorderSide(color: heapPrimary, width: 2)
             : BorderSide.none,
       ),
       child: InkWell(
         focusNode: widget.focusNode,
         onFocusChange: (focused) => setState(() => _focused = focused),
         onTap: widget.onSelected,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(24),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(
@@ -388,7 +386,7 @@ class _IconTileState extends State<_IconTile> {
                     const Icon(
                       Icons.check,
                       size: 20,
-                      color: heapGreen,
+                      color: heapPrimary,
                       applyTextScaling: false,
                     ),
                   ],

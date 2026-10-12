@@ -74,7 +74,7 @@ class TaskListBody extends StatelessWidget {
         child: SingleChildScrollView(
           controller: scroll,
           padding: EdgeInsets.all(
-            MediaQuery.sizeOf(context).width >= 600 ? 24 : 16,
+            MediaQuery.sizeOf(context).width >= 600 ? 24 : 20,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -85,11 +85,7 @@ class TaskListBody extends StatelessWidget {
                 child: Text(
                   onHeap ? 'Heap' : 'Inbox',
                   key: Key(onHeap ? 'heap-heading' : 'inbox-heading'),
-                  style: const TextStyle(
-                    fontSize: 30,
-                    fontWeight: FontWeight.w800,
-                    color: heapInk,
-                  ),
+                  style: heapHeadingStyle,
                 ),
               ),
               const SizedBox(height: 6),
@@ -97,12 +93,20 @@ class TaskListBody extends StatelessWidget {
                 onHeap
                     ? 'On the heap, not necessarily unblocked or started.'
                     : 'Capture now. Organize later.',
-                style: const TextStyle(fontSize: 15, color: heapMuted),
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: heapInk,
+                  height: 1.55,
+                ),
               ),
               if (onHeap)
                 const Text(
                   'Ordered by priority, due date, and time on the Heap.',
-                  style: TextStyle(color: heapMuted),
+                  style: TextStyle(
+                    color: heapMuted,
+                    fontSize: 15,
+                    height: 1.55,
+                  ),
                 ),
               const SizedBox(height: 16),
               Semantics(
@@ -112,10 +116,15 @@ class TaskListBody extends StatelessWidget {
                   selected: {onHeap},
                   style: ButtonStyle(
                     minimumSize: const WidgetStatePropertyAll(Size(0, 48)),
+                    shape: const WidgetStatePropertyAll(
+                      RoundedRectangleBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(24)),
+                      ),
+                    ),
                     backgroundColor: WidgetStateProperty.resolveWith(
                       (states) => states.contains(WidgetState.selected)
-                          ? heapGreen
-                          : heapCanvas,
+                          ? heapPrimary
+                          : heapSurface,
                     ),
                     foregroundColor: WidgetStateProperty.resolveWith(
                       (states) => states.contains(WidgetState.selected)
@@ -217,11 +226,16 @@ class TaskListBody extends StatelessWidget {
                       ? 'Nothing on the heap yet.'
                       : 'Your inbox is empty.',
                   key: Key(onHeap ? 'empty-on-heap' : 'empty-inbox'),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 Text(
                   onHeap
                       ? 'Give an inbox task a priority and duration, then save.'
                       : 'Tap + to capture a task.',
+                  style: const TextStyle(fontSize: 15, color: heapMuted),
                 ),
                 if (onHeap)
                   OutlinedButton(

@@ -152,6 +152,7 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
         builder: (context) => AlertDialog(
           title: Text(
             uncertain ? 'Leave without checking the save?' : 'Discard changes?',
+            style: heapSheetHeadingStyle,
           ),
           content: Text(
             uncertain
@@ -248,10 +249,7 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
                 icon: const Icon(Icons.arrow_back),
               ),
               const Expanded(
-                child: Text(
-                  'Edit task',
-                  style: TextStyle(fontWeight: FontWeight.w800),
-                ),
+                child: Text('Edit task', style: heapSheetHeadingStyle),
               ),
             ],
           ),
@@ -267,7 +265,7 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
                   MediaQuery.textScalerOf(context).scale(1) >= 1.5;
               final padding = MediaQuery.sizeOf(context).width >= 600
                   ? 24.0
-                  : 16.0;
+                  : 20.0;
               final content = _form(context);
               final actions = _actions(context);
               final scroller = Scrollbar(
@@ -402,7 +400,9 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
         scrollPadding: const EdgeInsets.all(32),
         decoration: InputDecoration(
           labelText: 'Task title',
-          border: const OutlineInputBorder(),
+          border: const OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(12)),
+          ),
           errorText:
               controller.fieldErrors['title'] ??
               (_titleTouched && draft.title.trim().isEmpty
@@ -624,7 +624,9 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
             decoration: InputDecoration(
               labelText: 'Due date',
               hintText: 'None',
-              border: const OutlineInputBorder(),
+              border: const OutlineInputBorder(
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+              ),
               errorText: _controller.fieldErrors['due_date'],
               suffixIcon: IconButton(
                 tooltip: 'Choose due date',
@@ -675,7 +677,9 @@ class _TaskEditorPageState extends State<TaskEditorPage> {
       isExpanded: true,
       decoration: const InputDecoration(
         labelText: 'Project',
-        border: OutlineInputBorder(),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(12)),
+        ),
       ),
       selectedItemBuilder: (context) => [
         const Align(alignment: Alignment.centerLeft, child: Text('No project')),

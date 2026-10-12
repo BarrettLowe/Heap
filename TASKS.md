@@ -161,7 +161,7 @@ Verification: review flags do not silently classify, modify, or delete tasks, an
 - [x] Complete the current occurrence and create the next one in a single transaction.
 - [x] Prevent repeated completion from generating duplicate outstanding occurrences.
 
-Verified in section 30: task-owned repeat settings and predecessor/successor
+Verified in section 32: task-owned repeat settings and predecessor/successor
 links replace a separate series/template table; completion uses the device's
 local date with atomic history/successor writes and guarded atomic Undo.
 
@@ -481,7 +481,51 @@ pass, including duration-label formatting.
 Verified with 216 passing Flutter tests, clean analysis, and successful web build.
 No emulator or phone was connected for visual/device verification.
 
-## 30. Completion-based repeating tasks
+## 30. Teetering pile launcher icon (partial work for issue #9)
+
+Barrett selected 01 / Teetering pile from Sol-6.1's proposals in
+`docs/icon-options/comparison.png`. Luna owns the Android/web integration.
+
+- [x] Create and visually check 3 elevation-view options; obtain Barrett's choice.
+- [x] Replace Android adaptive/legacy and web/PWA/favicon artwork without changing app behavior.
+- [x] Verify reproducible exports, native PNG dimensions, transparency and web mask safety; warn about Android's generic safe-circle limit.
+- [x] Verify Flutter analysis, all 216 tests, debug/release APK builds and the web build.
+- [x] Install the release APK and visually check the circle launcher icon on the API 37 emulator.
+- [x] Install the release APK, verify home-screen and predicted-dock icons on Barrett's Pixel 6 Pro, and open Heap from its icon.
+
+Editable source: `docs/icon-options/01-teetering-pile.svg`. Export command:
+`python3 ui/tool/export_icons.py`. Barrett chose to retain the current Android
+size for his Pixel 6 Pro rather than shrink it to accommodate all launcher masks.
+The generic safe-circle check is a warning. The physical Pixel 6 Pro icons looked
+centered and unclipped at this size.
+
+## 31. In-app mark and palette (issue #9, corrected scope)
+
+The launcher work did not complete issue #9: Barrett meant the forest-green
+mountain inside the app. Keep the approved launcher change, replace the in-app
+mark with the teetering pile, then agree a palette before recoloring the UI.
+
+- [x] Have Sol-6.1 specify the transparent header mark and 2 accessible palette options.
+- [x] Replace the in-app mountain with the approved untinted artwork; preserve layout and semantics.
+- [x] Verify all 218 widget tests, analysis and release APK/web builds.
+- [x] Complete independent Luna code review and Sol-6.1 emulator header review; neither found blockers.
+- [x] Verify the in-app header on the emulator at normal and 320/2x text, and in narrow/wide Firefox web views.
+- [x] Install the release build and verify the actual in-app header on the unlocked Pixel 6 Pro.
+- [x] Have Sol-6.1 design 3 distinct theme directions and Luna present them in `docs/heap-brand-refresh/themes/index.html`.
+- [x] Verify local HTML view switching, keyboard operation and all views at 320px / 200% Firefox zoom; no horizontal overflow or toolbar overlap.
+- [x] Have Barrett choose a theme before changing the app palette: Paper desk.
+- [x] Apply Paper desk colors, typography, shapes and component states without changing task behavior or stored project colors.
+- [x] Verify all 223 tests, Flutter analysis, debug/release APK builds and the web build.
+- [x] Complete final independent Luna code review and Sol-6.1 visual review; neither found blockers.
+- [x] Verify emulator and narrow/wide web rendering, including 320/2x Android text and 320px/200% Firefox zoom, completion/undo, filters, capture, project editing and saved green project data.
+- [x] Install and open the release build on Barrett's Pixel 6 Pro; verify the Paper desk Inbox with live server data.
+
+Barrett selected Paper desk from the 3-direction HTML preview. Implementation
+uses its warm cream, charcoal, cobalt and serif headings; the wordmark stays sans.
+The applied theme is verified on emulator, web and Pixel 6 Pro. Barrett approved
+the Pixel build and requested a pull request for issue #9.
+
+## 32. Completion-based repeating tasks
 
 Barrett approved days/months from completion's device-local date, clamped months,
 atomic successor creation, guarded Undo, inherited task details with reset
@@ -536,8 +580,9 @@ actual final tree with no findings. Reviewer independently ran 374 Python tests,
 chunk-boundary/5,000-digit/restart/overflow/Off probes, and actual built-web
 model/draft probes, and inspected the successful 50-test Chrome log.
 
-Work is isolated on `feat/repeating-tasks`; uncommitted branding work in `Heap`
-is not included. No hosted backend or phone beta deployment was performed.
+Initial work was isolated on `feat/repeating-tasks` and left uncommitted branding
+work in `Heap` untouched. The later master merge includes the approved Paper desk
+changes from PR #12. No hosted backend or phone beta deployment was performed.
 Pull request: [#11](https://github.com/BarrettLowe/Heap/pull/11).
 
 ### Live-data correction and upgrade test
@@ -561,3 +606,14 @@ framework or production-code change was needed: startup already uses additive
 `ALTER TABLE` operations. Independent review approved the test and live-data
 guidance; isolated mutations disabling the repeat-column upgrade or overwriting
 old update timestamps both made the test fail.
+
+### Master merge conflict fix
+
+Merged `origin/master` at `09da8f5`, retaining its Paper desk theme and branding.
+The only explicit conflict was this task list: kept branding sections 30/31,
+renumbered recurrence to 32, and updated its earlier cross-reference. UI files
+merged automatically; independent integration review approved preservation of
+both parents' behavior. Coordinator verified 375 Python tests (96.69% coverage),
+245 Flutter tests, 50 Chrome model/API/editor tests, clean analysis, web/debug APK
+builds, and whitespace checks. PR #11 remains draft for the separate old-client
+compatibility issue. No deployment or production-data access.

@@ -1,0 +1,1 @@
+Noto Serif Bold bundled from /usr/share/fonts/truetype/noto/NotoSerif-Bold.ttf (fonts-noto-core package). Registered as HeapSerif weight 700 for offline Android and web headings. Copyright and SIL Open Font License 1.1: NOTO-SERIF-OFL.txt.

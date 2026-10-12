@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:heap_app/heap_style.dart';
 import 'package:heap_app/task_detail.dart';
 import 'package:heap_app/task_widgets.dart';
 
@@ -82,11 +83,11 @@ void main() {
       expect(find.text('Monday, October 5, 2026'), findsOneWidget);
       expect(
         tester.widget<Text>(find.text('Monday, October 5, 2026')).style!.color,
-        const Color(0xFF68716C),
+        heapMuted,
       );
       expect(
         tester.widget<Icon>(find.byIcon(Icons.calendar_today)).color,
-        const Color(0xFF68716C),
+        heapMuted,
       );
       expect(
         tester

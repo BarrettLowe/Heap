@@ -18,6 +18,10 @@ void main() {
     yield LicenseEntryWithLineBreaks([
       'Heap project icons (Apache License 2.0)',
     ], await rootBundle.loadString('assets/fonts/APACHE-2.0.txt'));
+    yield LicenseEntryWithLineBreaks([
+      'Noto Serif (Google)',
+      'SIL Open Font License 1.1',
+    ], await rootBundle.loadString('assets/fonts/NOTO-SERIF-OFL.txt'));
   });
   final baseUri = parseApiBaseUri(
     const String.fromEnvironment('HEAP_API_BASE_URL'),
@@ -61,29 +65,132 @@ class _HeapAppState extends State<HeapApp> {
     title: 'Heap',
     theme: ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(seedColor: heapGreen).copyWith(
-        primary: heapGreen,
+      colorScheme: ColorScheme.fromSeed(seedColor: heapPrimary).copyWith(
+        primary: heapPrimary,
         onPrimary: Colors.white,
-        surface: heapCanvas,
+        primaryContainer: heapHighlight,
+        onPrimaryContainer: heapInk,
+        secondary: heapPrimary,
+        onSecondary: Colors.white,
+        secondaryContainer: heapWarningSurface,
+        onSecondaryContainer: heapWarningText,
+        tertiary: heapPrimary,
+        onTertiary: Colors.white,
+        tertiaryContainer: heapHighlight,
+        onTertiaryContainer: heapInk,
+        surface: heapSurface,
         onSurface: heapInk,
+        onSurfaceVariant: heapMuted,
+        surfaceContainerLowest: heapSurface,
+        surfaceContainerLow: heapSurface,
+        surfaceContainer: heapSurface,
+        surfaceContainerHigh: heapSurface,
+        surfaceContainerHighest: heapSurface,
+        surfaceTint: Colors.transparent,
+        outline: heapBorder,
+        outlineVariant: heapDivider,
+        error: heapError,
+        onError: Colors.white,
+        errorContainer: heapErrorSurface,
+        onErrorContainer: heapError,
       ),
       scaffoldBackgroundColor: heapCanvas,
       appBarTheme: const AppBarTheme(
         backgroundColor: heapCanvas,
         foregroundColor: heapInk,
+        surfaceTintColor: Colors.transparent,
+      ),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: heapSurface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(24)),
+        ),
+        titleTextStyle: heapSheetHeadingStyle,
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: heapSurface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+      ),
+      popupMenuTheme: const PopupMenuThemeData(
+        color: heapSurface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(24)),
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: heapSurface,
+        selectedColor: heapHighlight,
+        checkmarkColor: heapPrimary,
+        labelStyle: const TextStyle(
+          color: heapInk,
+          fontWeight: FontWeight.w600,
+        ),
+        side: const BorderSide(color: heapBorder),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
       filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+        style: FilledButton.styleFrom(
+          minimumSize: const Size(0, 48),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          backgroundColor: heapPrimary,
+          foregroundColor: Colors.white,
+        ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 48)),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, 48),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          foregroundColor: heapPrimary,
+          side: const BorderSide(color: heapPrimary),
+        ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(minimumSize: const Size(0, 48)),
+        style: TextButton.styleFrom(
+          minimumSize: const Size(0, 48),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          foregroundColor: heapPrimary,
+        ),
       ),
-      inputDecorationTheme: const InputDecorationTheme(
+      inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: Colors.white,
+        fillColor: heapSurface,
+        labelStyle: const TextStyle(
+          color: heapMuted,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+        hintStyle: const TextStyle(color: heapMuted),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: heapBorder),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: heapBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: heapPrimary, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: heapError),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: heapError, width: 2),
+        ),
       ),
     ),
     home: widget.configurationError || widget.api == null

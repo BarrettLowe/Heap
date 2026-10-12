@@ -14,7 +14,7 @@ A generated occurrence copies the completed task's title, project, priority, dur
 
 ## Task editor control
 
-Add the `Repeat` controls to the existing full-page `Edit task` form, after Duration and before Due date. Preserve the current warm canvas, outlined fields, 640-pixel editor cap, form spacing, and single green `Save`.
+Add the `Repeat` controls to the existing full-page `Edit task` form, after Duration and before Due date. Preserve the current warm canvas, outlined fields, 640-pixel editor cap, form spacing, and single `Save` action styled by the current Paper desk theme.
 
 Use 1 outlined selector labeled `Repeat` with exactly 3 choices: `Off`, `Days`, and `Months`. When `Days` or `Months` is selected, show an outlined numeric field labeled `Interval` for the positive whole-number count. The selected unit remains visible in the Repeat selector; do not add a second Unit selector or combine the number and unit into a menu. The form reads, for example, `Repeat [Months ▾]` followed by `Interval [ 2 ]`.
 

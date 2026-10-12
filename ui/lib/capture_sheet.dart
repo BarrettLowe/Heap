@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'heap_style.dart';
 import 'inbox_controller.dart';
 import 'inbox_task.dart';
 import 'task_widgets.dart';
@@ -72,8 +73,7 @@ class _CaptureSheetState extends State<CaptureSheet> {
                           Expanded(
                             child: Text(
                               'Capture task',
-                              style: Theme.of(context).textTheme.titleLarge
-                                  ?.copyWith(fontWeight: FontWeight.w800),
+                              style: heapSheetHeadingStyle,
                             ),
                           ),
                           IconButton(
@@ -102,7 +102,7 @@ class _CaptureSheetState extends State<CaptureSheet> {
                         textInputAction: TextInputAction.done,
                         onSubmitted: (_) => _capture(),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       const Text(
                         'Unsaved capture text stays here until you add it or clear it.',
                       ),

@@ -29,7 +29,7 @@ Future<void> host(
     MaterialApp(
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: heapGreen),
+        colorScheme: ColorScheme.fromSeed(seedColor: heapPrimary),
       ),
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(context)
