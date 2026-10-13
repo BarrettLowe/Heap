@@ -19,6 +19,7 @@ void main() {
     'externally_blocked': false,
     'project_id': null,
     'due_date': null,
+    'repeat': null,
   };
 
   test('GET uses the contract path and parses immutable inbox tasks', () async {

@@ -41,7 +41,10 @@ class TaskEditorController extends ChangeNotifier {
       !saving &&
       !needsChoice &&
       matching == null;
-  bool get canSave => editable && draft!.title.trim().isNotEmpty;
+  bool get canSave =>
+      editable &&
+      draft!.title.trim().isNotEmpty &&
+      (!draft!.repeatEnabled || draft!.repeatIntervalValid);
 
   Future<void> load() async {
     if (saving || loading || saved != null) return;
@@ -76,6 +79,10 @@ class TaskEditorController extends ChangeNotifier {
     bool setDuration = false,
     CalendarDate? dueDate,
     bool setDueDate = false,
+    String? repeatUnit,
+    bool setRepeatUnit = false,
+    String? repeatIntervalText,
+    bool setRepeatInterval = false,
   }) {
     if (!editable) return;
     draft = OrganizationDraft(
@@ -85,12 +92,19 @@ class TaskEditorController extends ChangeNotifier {
       externallyBlocked: externallyBlocked ?? draft!.externallyBlocked,
       projectId: setProject ? projectId : draft!.projectId,
       dueDate: setDueDate ? dueDate : draft!.dueDate,
+      repeatUnit: setRepeatUnit ? repeatUnit : draft!.repeatUnit,
+      repeatIntervalText: setRepeatUnit && repeatUnit == null
+          ? null
+          : setRepeatInterval
+          ? repeatIntervalText
+          : draft!.repeatIntervalText,
     );
     final errors = {...fieldErrors};
     if (title != null) errors.remove('title');
     if (setPriority) errors.remove('priority');
     if (setDuration) errors.remove('duration_minutes');
     if (setDueDate) errors.remove('due_date');
+    if (setRepeatUnit || setRepeatInterval) errors.remove('repeat');
     if (externallyBlocked != null) errors.remove('externally_blocked');
     fieldErrors = Map.unmodifiable(errors);
     _notify();
@@ -190,7 +204,7 @@ class TaskEditorController extends ChangeNotifier {
     error = null;
     fieldErrors = const {};
     notice = keepEdits
-        ? 'Your edits are not saved. Saving will replace the server\'s title, priority, duration, due date, awaiting flag, and project with your values.'
+        ? 'Your edits are not saved. Saving will replace the server\'s title, priority, duration, due date, repeat setting, awaiting flag, and project with your values.'
         : null;
     _notify();
   }

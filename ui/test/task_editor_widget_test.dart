@@ -61,6 +61,77 @@ Future<void> revealTap(WidgetTester tester, Finder target) async {
 }
 
 void main() {
+  testWidgets(
+    'repeat is a draft selector; interval validates and saves with due date unchanged',
+    (tester) async {
+      final org = FakeOrganization()
+        ..onGet = (_) async => detail(dueDate: '2026-10-05');
+      await openEditor(tester, org);
+      await tester.pumpAndSettle();
+      expect(find.text('Repeat'), findsOneWidget);
+      expect(find.text('Due date'), findsOneWidget);
+      expect(find.byKey(const Key('editor-repeat-interval')), findsNothing);
+      await revealTap(tester, find.byKey(const ValueKey('editor-repeat-off')));
+      await tester.tap(find.text('Days').last);
+      await tester.pumpAndSettle();
+      expect(org.puts, 0);
+      expect(find.byKey(const Key('editor-repeat-interval')), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const Key('editor-repeat-interval')),
+        '2',
+      );
+      await revealTap(tester, find.byKey(const ValueKey('editor-repeat-days')));
+      await tester.tap(find.text('Off').last);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('editor-repeat-interval')), findsNothing);
+      await revealTap(tester, find.byKey(const ValueKey('editor-repeat-off')));
+      await tester.tap(find.text('Months').last);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('editor-repeat-interval')), findsOneWidget);
+      expect(find.text('2'), findsOneWidget);
+      await revealTap(tester, find.byKey(const Key('editor-save')));
+      expect(org.lastSubmission!.toJson()['repeat'], {
+        'unit': 'months',
+        'interval': '2',
+      });
+      expect(org.lastSubmission!.draft.dueDate.toString(), '2026-10-05');
+      expect(org.puts, 1);
+    },
+  );
+
+  testWidgets(
+    'invalid interval remains visible and repeat draft can be discarded at 320px and large text',
+    (tester) async {
+      tester.view.physicalSize = const Size(640, 1280);
+      tester.view.devicePixelRatio = 2;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final org = FakeOrganization();
+      await openEditor(tester, org, scale: 2);
+      await tester.pumpAndSettle();
+      await revealTap(tester, find.byKey(const ValueKey('editor-repeat-off')));
+      await tester.tap(find.text('Months').last);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const Key('editor-repeat-interval')),
+        '1e2',
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Enter a whole number greater than 0.'), findsOneWidget);
+      expect(org.puts, 0);
+      expect(tester.takeException(), isNull);
+      await revealTap(tester, find.byKey(const Key('editor-back')));
+      expect(find.text('Discard changes?'), findsOneWidget);
+      await tester.tap(find.text('Keep editing'));
+      await tester.pumpAndSettle();
+      expect(org.puts, 0);
+      await revealTap(tester, find.byKey(const Key('editor-back')));
+      await tester.tap(find.text('Discard changes'));
+      await tester.pumpAndSettle();
+      expect(org.puts, 0);
+    },
+  );
+
   for (final projectId in [null, assignedProjectId]) {
     testWidgets(
       'task editor shows project picker and preserves association $projectId',

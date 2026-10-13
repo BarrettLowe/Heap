@@ -509,6 +509,68 @@ days after the actual completion.
 
 This recurrence therefore drifts.
 
+### Agreed first implementation: days and months
+
+The current task may repeat every positive whole N days or N months after
+completion. Weeks are expressible as days. Calendar-based rules remain future
+work; this change implements only completion-based recurrence. HTTP represents
+the interval as canonical positive decimal text so Android and web can retain
+the exact whole number without rounding, including large saved values. Clients
+must still be able to read those tasks and turn repeat off; if an interval cannot
+produce a supported due date, reject completion without writes.
+
+Calculate the next due date from the completing device's local calendar date,
+not the server's UTC date or the previous due date. Store completion timestamps
+in UTC as before. Days mean calendar-date addition, not elapsed 24-hour periods.
+Months use the same day number, capped at the last valid day of the target month.
+For example, January 31 plus 1 month is February 28 (29 in a leap year). A later
+completion on February 28 produces March 28: calculate fresh on each completion,
+without keeping an original month-end anchor. Reject a result outside the
+supported calendar range without completing the task or creating a successor.
+
+The first occurrence retains its existing optional due date. Enabling or editing
+repeat settings does not calculate or overwrite that date. Recurrence needs no
+separate start date and does not change Inbox/Heap qualification.
+
+Completion retains the current occurrence as history and immediately creates
+exactly 1 successor in the same database transaction. Repeated completion must
+not create duplicates. The successor copies title, project, priority, duration,
+and repeat settings. Its due date is newly calculated. Give it a new ID and
+creation/update timestamps; clear completion, external waiting, and dependency
+links. Qualifying work starts a fresh Heap age at the actual creation time;
+otherwise it belongs in Inbox. Future due dates never delay Heap membership.
+When structured contexts are added later, their ordinary task requirements can
+be copied in the same place; do not implement contexts as part of this change.
+Existing tasks depending on the completed occurrence remain linked to that
+occurrence, which is now completed; do not redirect them to its successor.
+
+The completion response updates only the original row in the current client.
+Keep the existing grey completed row and Undo control until a successful list
+reload. The successor becomes visible on that reload, not through immediate
+client insertion. Other devices may see the saved successor immediately.
+Fetching or refreshing lists must never create occurrences.
+
+Undo restores the original occurrence, including its original Heap age, and
+removes the generated successor in 1 transaction. Allow this only while the
+successor is still unfinished, unchanged since creation, and has no dependency
+links in either direction. Saved task-field edits, repeat edits, completion, or
+outgoing dependency edits advance its comparison token, even if later reverted.
+Reject Undo if the successor is changed, completed, deleted, or currently used
+in a dependency link; preserve all saved work and explain why Undo was refused.
+A failed write must leave both occurrences unchanged. Re-completion after a
+successful Undo creates exactly 1 new successor.
+
+Repeat settings live on the current unfinished task, not in a separate series
+editor. Edits affect the next successor and later occurrences, never completed
+history. Turning repeat off leaves the current task as a one-off. Permanently
+deleting the current task ends its repetition without creating a replacement;
+deleting a project removes all its tasks as usual. Deleting completed history
+alone does not remove an independently saved successor. No skip-occurrence
+command, series-wide editing, history UI, background scheduler, or automatic
+missed-instance generation is included.
+
+Approved implementation and HTTP/UI details: `docs/repeating-tasks-plan.md`.
+
 ## 9.2 Calendar-Based Recurrence
 
 The recurrence remains attached to a calendar rhythm.

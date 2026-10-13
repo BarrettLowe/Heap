@@ -29,6 +29,7 @@ def organization(task: dict[str, object], due_date: str | None) -> dict[str, obj
         "externally_blocked": False,
         "project_id": None,
         "due_date": due_date,
+        "repeat": None,
         "expected_updated_at": task["updated_at"],
     }
 
@@ -115,7 +116,7 @@ def test_completion_and_undo_responses_retain_due_date(
         task, path = capture_and_organize(client)
         completed = client.put(
             path + "/completion",
-            json={"completed": True, "expected_updated_at": task["updated_at"]},
+            json={"completed": True, "expected_updated_at": task["updated_at"], "local_date": "2026-10-05"},
         )
         assert completed.status_code == 200
         completed_task = completed.json()
@@ -125,6 +126,7 @@ def test_completion_and_undo_responses_retain_due_date(
             json={
                 "completed": False,
                 "expected_updated_at": completed_task["updated_at"],
+                "local_date": "2026-10-05",
             },
         )
         assert undone.status_code == 200

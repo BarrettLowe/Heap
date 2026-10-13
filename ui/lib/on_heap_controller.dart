@@ -24,6 +24,7 @@ class OnHeapController extends ChangeNotifier {
   final Map<String, TaskDetail> _provisional = {};
   final Set<String> _checking = {};
   final Map<String, String> _rowErrors = {};
+  final Map<String, String> _rowErrorCodes = {};
   bool _disposed = false;
   CalendarDate? _lastSuccessfulLoadDate;
   List<TaskDetail> get tasks => _tasks;
@@ -34,6 +35,7 @@ class OnHeapController extends ChangeNotifier {
   bool isChecking(String id) =>
       _checking.contains(id) || (loading && isUncertain(id));
   String? errorFor(String id) => _rowErrors[id];
+  String? errorCodeFor(String id) => _rowErrorCodes[id];
 
   Future<void> toggleCompletion(String id) async {
     final index = _tasks.indexWhere((task) => task.id == id);
@@ -42,6 +44,7 @@ class OnHeapController extends ChangeNotifier {
     }
     final original = _tasks[index];
     if (original.status != 'on_heap' && original.status != 'completed') return;
+    final localDate = CalendarDate.fromLocalDate(clock()).toString();
     final completed = original.status == 'on_heap';
     if (completed) {
       _completionPositions[id] = (
@@ -55,9 +58,14 @@ class OnHeapController extends ChangeNotifier {
     final deletionVersion = _projectDeletionVersion;
     _pending.add(id);
     _rowErrors.remove(id);
+    _rowErrorCodes.remove(id);
     _notify();
     try {
-      final result = await _api.setCompletion(original, completed: completed);
+      final result = await _api.setCompletion(
+        original,
+        completed: completed,
+        localDate: localDate,
+      );
       if (_disposed || deletionVersion != _projectDeletionVersion) return;
       ++_readVersion;
       loading = false;
@@ -81,6 +89,7 @@ class OnHeapController extends ChangeNotifier {
         if (wasMissing) stale = true;
       } else {
         _rowErrors[id] = failure.message;
+        if (failure.code case final code?) _rowErrorCodes[id] = code;
       }
     } catch (_) {
       if (_disposed || deletionVersion != _projectDeletionVersion) return;
@@ -225,6 +234,7 @@ class OnHeapController extends ChangeNotifier {
         }
       }
       _rowErrors.clear();
+      _rowErrorCodes.clear();
       _lastSuccessfulLoadDate = requestedDate;
       loaded = true;
       stale = provisionalRecovery;
@@ -253,6 +263,8 @@ class OnHeapController extends ChangeNotifier {
     _uncertain.clear();
     _completionPositions.clear();
     _tasks = const [];
+    _rowErrors.clear();
+    _rowErrorCodes.clear();
     loaded = false;
     stale = false;
     error = null;

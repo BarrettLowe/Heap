@@ -155,11 +155,15 @@ Verification: review flags do not silently classify, modify, or delete tasks, an
 
 ## 12. Completion-based recurrence
 
-- [ ] Define recurring series metadata and its relationship to task occurrences.
-- [ ] Generate the next occurrence from actual completion time.
-- [ ] Preserve completed occurrences as history.
-- [ ] Complete the current occurrence and create the next one in a single transaction.
-- [ ] Prevent repeated completion from generating duplicate outstanding occurrences.
+- [x] Define recurring series metadata and its relationship to task occurrences.
+- [x] Generate the next occurrence from actual completion time.
+- [x] Preserve completed occurrences as history.
+- [x] Complete the current occurrence and create the next one in a single transaction.
+- [x] Prevent repeated completion from generating duplicate outstanding occurrences.
+
+Verified in section 32: task-owned repeat settings and predecessor/successor
+links replace a separate series/template table; completion uses the device's
+local date with atomic history/successor writes and guarded atomic Undo.
 
 Verification: late completion shifts the next due date correctly, with only one outstanding occurrence and no partial database writes.
 
@@ -520,3 +524,96 @@ Barrett selected Paper desk from the 3-direction HTML preview. Implementation
 uses its warm cream, charcoal, cobalt and serif headings; the wordmark stays sans.
 The applied theme is verified on emulator, web and Pixel 6 Pro. Barrett approved
 the Pixel build and requested a pull request for issue #9.
+
+## 32. Completion-based repeating tasks
+
+Barrett approved days/months from completion's device-local date, clamped months,
+atomic successor creation, guarded Undo, inherited task details with reset
+waiting/dependencies/age, and current-task repeat editing. Calendar-based rules
+remain future work. Spec: section 9.1; plan: `docs/repeating-tasks-plan.md`;
+Designer handoff: `docs/repeating-tasks-design.md`.
+
+- [x] Finish the agreed spec and freeze the implementation/HTTP plan.
+- [x] Designer: provide the existing-editor Repeat control handoff.
+- [x] Luna Backend: recurrence rules, storage, atomic completion/Undo, HTTP, and tests; verify the review-driven decimal-text wire fix.
+- [x] Luna Frontend: repeat drafts/editor/transport/recovery and tests; verify lossless intervals on native and browser.
+- [x] Coordinator: rerun full Python/Flutter checks, browser regressions, and web/debug APK builds after fixes.
+- [x] Reverify isolated API and actual Android/web behavior after the wire fix.
+- [x] Designer: review actual narrow/large-text Android and web screenshots.
+- [x] Complete independent final review and any fix/review cycle.
+- [ ] Verify repeating-task behavior on a physical phone.
+- [x] Push the reviewed branch and open a pull request; do not merge or deploy.
+
+Initial coordinator verification: 373 Python tests passed with 96.61% line coverage;
+234 Flutter tests, analysis, web/debug APK builds, lock and whitespace checks
+passed. Container build, Compose validation, and health/capture/persistent-volume
+smoke also passed. Live isolated HTTP verified days, clamped/leap months,
+device-local dates, inherited/reset fields, fresh age, repeated completion,
+Undo/recompletion, changed-successor refusal, Off, nested validation, overflow,
+project-task serialization, and exact Inbox/Heap/history snapshots after restart.
+
+Firefox verified repeat Save, invalid interval/discard, completion/Undo, successor
+visibility only after reload, guarded Undo feedback, and Off. Android emulator
+verified month repeat Save, local-date due date, waiting reset, original-age Undo,
+and refreshed successor. Actual 320-logical-pixel/2x-text editor controls and Save
+were reachable by scrolling; floating-keyboard and narrow Firefox checks passed.
+Phone, docked-keyboard, and live screen-reader checks remain unverified. Emulator
+size and text scale were restored. Designer found no layout blockers; the Undo
+copy correction was verified in Firefox with a real incoming dependency link.
+
+First independent code review passed backend tests and additional rollback,
+concurrency, deletion, CORS, and overflow probes, but found 2 frontend large-number
+blockers: web rounding/Infinity and Android rejecting saved large JSON integers.
+The coordinator revised the interval wire value to canonical decimal text,
+preserving exact positive whole-number semantics without an arbitrary interval
+cap or a custom JSON parser. Both paths are fixed. Final coordinator checks:
+374 Python tests with 96.69% line coverage, 238 native Flutter tests, 50 actual
+Chrome model/API/editor tests, clean analysis, web/debug APK builds, final
+container build/smoke, and whitespace checks passed. Live API preserved 400- and
+5,000-digit values exactly, rejected invalid wire types and unrepresentable dates
+without writes, and allowed Off. Firefox read 80 digits and typed/saved 400 digits
+without rounding; Android loaded an 80-digit value and persisted Off. Both final
+apps passed ordinary recurrence completion/Undo; Android refreshed its successor.
+Final restart retained exact Inbox/Heap/history snapshots including a 400-digit
+interval, comparison tokens, and ages. Independent follow-up review approved the
+actual final tree with no findings. Reviewer independently ran 374 Python tests,
+chunk-boundary/5,000-digit/restart/overflow/Off probes, and actual built-web
+model/draft probes, and inspected the successful 50-test Chrome log.
+
+Initial work was isolated on `feat/repeating-tasks` and left uncommitted branding
+work in `Heap` untouched. The later master merge includes the approved Paper desk
+changes from PR #12. No hosted backend or phone beta deployment was performed.
+Pull request: [#11](https://github.com/BarrettLowe/Heap/pull/11).
+
+### Live-data correction and upgrade test
+
+Barrett clarified that Heap is live. Corrected `AGENTS.md` to protect production
+data and require a safe upgrade path and installed-client compatibility. PR #11
+was returned to draft: older apps do not send the newly required `repeat` and
+completion `local_date` fields. This remains separate from database safety.
+
+- [x] Add a focused pre-recurrence SQLite upgrade test and verify it locally.
+- [x] Complete independent review of the upgrade test.
+- [ ] Resolve old-client compatibility or agree a safe rollout before deployment.
+- [ ] Verify upgrading an actual production backup before deployment.
+
+`tests/test_recurrence_database_upgrade.py` builds the old schema independently,
+retains old task/project/dependency records and history, checks nullable recurrence
+defaults, and exercises startup and reads after reopening. Coordinator ran the
+focused test and all 375 Python tests with 96.69% line coverage. No production
+database was accessed; this uses only a synthetic fixture. No new migration
+framework or production-code change was needed: startup already uses additive
+`ALTER TABLE` operations. Independent review approved the test and live-data
+guidance; isolated mutations disabling the repeat-column upgrade or overwriting
+old update timestamps both made the test fail.
+
+### Master merge conflict fix
+
+Merged `origin/master` at `09da8f5`, retaining its Paper desk theme and branding.
+The only explicit conflict was this task list: kept branding sections 30/31,
+renumbered recurrence to 32, and updated its earlier cross-reference. UI files
+merged automatically; independent integration review approved preservation of
+both parents' behavior. Coordinator verified 375 Python tests (96.69% coverage),
+245 Flutter tests, 50 Chrome model/API/editor tests, clean analysis, web/debug APK
+builds, and whitespace checks. PR #11 remains draft for the separate old-client
+compatibility issue. No deployment or production-data access.

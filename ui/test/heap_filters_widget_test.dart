@@ -191,7 +191,9 @@ void main() {
     expect(org.lists, 1);
   });
 
-  testWidgets('Clear removes a legacy minimum-only time filter', (tester) async {
+  testWidgets('Clear removes a legacy minimum-only time filter', (
+    tester,
+  ) async {
     HeapFilter? changed;
     await tester.pumpWidget(
       MaterialApp(

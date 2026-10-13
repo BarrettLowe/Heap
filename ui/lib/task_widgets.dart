@@ -60,6 +60,7 @@ class TaskRow extends StatefulWidget {
     this.onCheckCompletion,
     this.completionChecking = false,
     this.completionError,
+    this.completionErrorCode,
   });
   final InboxTask task;
   final VoidCallback onOpen;
@@ -72,6 +73,7 @@ class TaskRow extends StatefulWidget {
   final VoidCallback? onCheckCompletion;
   final bool completionChecking;
   final String? completionError;
+  final String? completionErrorCode;
   @override
   State<TaskRow> createState() => _TaskRowState();
 }
@@ -458,6 +460,8 @@ class _TaskRowState extends State<TaskRow> {
         ? 'Updating completion for ${task.title}…'
         : widget.completionError == null
         ? null
+        : widget.completionErrorCode == 'recurrence_undo_conflict'
+        ? widget.completionError
         : 'Could not ${completed ? 'undo completion for' : 'complete'} ${task.title}. Retry. ${widget.completionError}';
     return Column(
       children: [
