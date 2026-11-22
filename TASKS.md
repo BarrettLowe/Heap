@@ -617,3 +617,16 @@ both parents' behavior. Coordinator verified 375 Python tests (96.69% coverage),
 245 Flutter tests, 50 Chrome model/API/editor tests, clean analysis, web/debug APK
 builds, and whitespace checks. PR #11 remains draft for the separate old-client
 compatibility issue. No deployment or production-data access.
+
+## Inbox capture word capitalization
+
+- [x] Request word capitalization from the keyboard for new task titles.
+- [x] Complete Designer and independent code review; whitespace check passes.
+- [ ] Verify Flutter analysis and existing tests in PR CI.
+- [ ] Verify keyboard behavior on an Android emulator and physical phone.
+
+The capture field now uses `TextCapitalization.words`. This requests an uppercase
+initial letter for each word from supported keyboards while preserving manual
+case choices and submitted text. Independent review found no issues. Local
+Flutter/Android checks are unavailable in this environment; CI and device
+verification remain pending.

@@ -92,6 +92,7 @@ class _CaptureSheetState extends State<CaptureSheet> {
                         controller: widget.title,
                         focusNode: widget.focus,
                         autofocus: true,
+                        textCapitalization: TextCapitalization.words,
                         minLines: 1,
                         maxLines: 4,
                         decoration: const InputDecoration(
