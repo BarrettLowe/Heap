@@ -622,11 +622,11 @@ compatibility issue. No deployment or production-data access.
 
 - [x] Request word capitalization from the keyboard for new task titles.
 - [x] Complete Designer and independent code review; whitespace check passes.
-- [ ] Verify Flutter analysis and existing tests in PR CI.
+- [x] Verify Flutter analysis and existing tests in PR CI.
 - [ ] Verify keyboard behavior on an Android emulator and physical phone.
 
 The capture field now uses `TextCapitalization.words`. This requests an uppercase
 initial letter for each word from supported keyboards while preserving manual
-case choices and submitted text. Independent review found no issues. Local
-Flutter/Android checks are unavailable in this environment; CI and device
-verification remain pending.
+case choices and submitted text. Independent review found no issues. PR #13 CI
+passed Flutter analysis and the existing Flutter/backend test suites. Local
+Flutter/Android checks are unavailable; device verification remains pending.
